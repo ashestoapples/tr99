@@ -1,6 +1,9 @@
 #ifndef KEYBOARD_H_INCLUDED
 #define KEYBOARD_H
 
+#define KEYBOARD
+
+#ifdef KEYBOARD
 //top 2 rows of the keyboard
 #define B1 	49
 #define B2 	113
@@ -23,10 +26,11 @@
 #define PAUSE 	32	//space
 #define COPY	99	//c
 #define PASTE	118	//v
-#define YES		13	//enter
+#define YES		10	//enter
 #define NO		8	//backspace
 #define DELETE	27	//esc
 #define DEMOPLAY 9	//tab
+#endif
 
 #endif
 
