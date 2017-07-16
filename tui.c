@@ -180,6 +180,8 @@ void mainMenu()
 				}
 				break;
 			case NO:
+				endwin();
+				return;
 				break;
 		}
 	}
