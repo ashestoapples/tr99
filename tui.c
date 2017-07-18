@@ -179,7 +179,7 @@ void mainMenu()
 
 				}
 				break;
-			case NO:
+			case DELETE:
 				endwin();
 				return;
 				break;
@@ -334,7 +334,7 @@ void patternEditor(float tempo, int ch, int d_iter)
 			case PLAY:
 				playingDisplay(tempo, ch, seq);
 				break;
-			case NO:
+			case 109:
 				for (int j = 0; j < 16; j++)
 					destroyStep(seq[j]);
 				return;
