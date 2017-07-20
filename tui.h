@@ -19,9 +19,10 @@
 
 static void file_iterate(char name[128], DIR *dir, struct dirent *ent, int offset, const int max_cols);
 void fileBrowse(char buf[128]);
+static int handleFuckingButtons(int ch);
 
 void mainMenu();
 void patternEditor(float tempo, int ch, int d_iter);
-void playingDisplay(float tempo, int ch, Step *seq[16]);
+void playingDisplay(float tempo, int ch, Channel *mix[16]);
 
 #endif

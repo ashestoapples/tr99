@@ -1,22 +1,31 @@
 #include "sound.h"
 #include "keyboard.h"
 
+#include "SDL_mixer.h"
+#include "SDL.h"
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <unistd.h> 
+#include <ncurses.h>
 
-typedef enum { false, true } bool;
+//typedef enum { false, true } bool;
 
 bool debug = true;
 
 /* reserve memory for sample */
-Sample * initSample(char *fn, float v)
+Sample * initSample(char *fn)
 {
+	//if (Mix_OpenAudio(22050, MIX_DEFAULT_FORMAT, 8, 4096) == -1)
+	//	printw("SDL_error: %s\n", Mix_GetError());
 	Sample *ptr = (Sample*)malloc(sizeof(Sample));
 	ptr->fname = (char*)malloc(sizeof(char)*128);
 	strcpy(ptr->fname, fn);
-	ptr->vol = v;
+	//printf("%s\n", ptr->fname);
+	ptr->chunk = Mix_LoadWAV(fn);
+	if (ptr->chunk == NULL)
+		destroySample(ptr);
 	return ptr;
 }
 
@@ -29,38 +38,57 @@ void destroySample(Sample *ptr)
 }
 
 /* reserve memory for Step struct */
-Step * initStep()
+Step * initStep(float vol)
 {
 	Step *ptr = (Step*)malloc(sizeof(Step));
-	ptr->sound_c = 0;
+	ptr->vol = vol;
 	return ptr;
 }
 
 /* free memory from Step struct */
 void destroyStep(Step *ptr)
 {
-	for (int i = 0; i < ptr->sound_c; i++)
+	if (ptr == NULL)
+		return;
+	free(ptr);
+	ptr = NULL;
+}
+
+Channel * initChannel(Sample *bank[16], int bank_index)
+{
+	Channel *ptr;
+	ptr = (Channel*)malloc(sizeof(Channel));
+	ptr->sound = bank[bank_index];
+	for (int i = 0; i < 16; i++)
 	{
-		destroySample(ptr->sounds[i]);
+		ptr->pattern[i] = NULL;
+	}
+	return ptr;
+}
+
+void DestroyChannel(Channel *ptr)
+{
+	for (int i = 0; i < 16; i++)
+	{
+		destroyStep(ptr->pattern[i]);
 	}
 	free(ptr);
 	ptr = NULL;
 }
 
-void destroy_p_args(struct p_args pa)
-{
-	for (int i = 0; i < 16; i++)
-	{
-		if (pa.com[i] != NULL)
-		{
-			free(pa.com[i]);
-			pa.com[i] = NULL;
-		}
-	}
-}
+// void destroy_p_args(struct p_args pa)
+// {
+// 	for (int i = 0; i < 16; i++)
+// 	{
+// 		if (pa.com[i] != NULL)
+// 		{
+// 			free(pa.com[i]);
+// 			pa.com[i] = NULL;
+// 		}
+// 	}
+// }
 
-/* create 16 step seq from .track file, refer to REAMME for track file syntax */
-void importSequence(char *fn, Step *seq[16])
+void loadSampleBank(char *fn, Sample *bank[16])
 {
 	FILE *fp = fopen(fn, "rb");
 	fseek(fp, 0, SEEK_END);
@@ -70,73 +98,132 @@ void importSequence(char *fn, Step *seq[16])
 	fread(str,fsize, 1, fp);
 	fclose(fp);
 	
-	if (debug) printf("Alloced str mem, fsize = %d\n", fsize);
+	char *name_buf = malloc(sizeof(char)*128);
 
-	int i = 0, c = 0, s = 0, j;
-	char buf_name[128], buf_vol[16];
-
-	memset(buf_name, '\0', 128);
-	memset(buf_vol, '\0', 16);
-	bool fn_flag = false,
-		 vol_flag = false;
-	for (j = 0; j < fsize; j++)
+	int j = 0, k = 0;
+	for (int i = 0; i < fsize; i++)
 	{
-		//if (debug) printf("in for loop, j = %d\n", j);
-		if ((fn_flag || vol_flag) && (int)str[j] != 44 )
+		if (str[i] != ';')
+			name_buf[j++] = str[i];
+		else
 		{
-			if (fn_flag)
-				buf_name[c++] = str[j];
-			else if (vol_flag)
-				buf_vol[c++] = str[j];
+			name_buf[j] = '\0';
+			bank[k++] = initSample(name_buf);
+			memset(name_buf, '\0', 128);
+			j = 0;
 		}
-		if ((int)str[j] == 40) //open (
+
+	}
+
+	free(name_buf);
+}
+
+/* create 16 step seq from .track file, refer to REAMME for track file syntax */
+void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
+{
+	FILE *fp = fopen(fn, "rb");
+	fseek(fp, 0, SEEK_END);
+	long fsize = ftell(fp);
+	fseek(fp, 0, SEEK_SET);
+	char *str = malloc(fsize + 1);
+	fread(str,fsize, 1, fp);
+	fclose(fp);
+	
+	if (debug) printw("Alloced str mem, fsize = %d\n", fsize);
+
+	int i, 					//for indexing buffer
+		j, 					//for indexing file
+		chan, 				//which cannel are we on
+		bank_index, 		//which sample from the sound bank do we want
+		group_attrib = 0, 	//for detection which step attrib we're one
+		seq_step = 0;		//which step in the channel are we on
+	char buf_vol[16];
+	bool new_line = true,
+		 f_bank	  = false,
+		 f_group  = false;
+
+	memset(buf_vol, '\0', 16);
+	for (j = 0; j < fsize; j++)
+	{	
+		//printw("%c", str[j]);getch();
+		if (new_line)
 		{
-			//if (debug) printf("Opened (\n");
-			fn_flag = true;
-		}
-		else if ((int)str[j] == 44) // comma ,
-		{
-			//if (debug) printw("File: %s\n", buf);
-			fn_flag = false;
-			//seq[i]->sounds[s]->fname = (char*)malloc(sizeof(char)*128);
-			//strcpy(seq[i].sounds[s].fname, buf);
-			//memset(buf, '\0', 128);
-			c = 0;
-			vol_flag = true;
-		}
-		else if ((int)str[j] == 41) // close )
-		{
-			if (!fn_flag)
+			if (str[j] == 'C')
 			{
-				//if (debug) printw("vol: %f\n", atof(buf_vol));
-				vol_flag = false;
-				//seq[i]->sounds[s]->vol = atof(buf_vol);
-				//memset(buf, '\0', 128);
-				seq[i]->sounds[s] = initSample(buf_name, atof(buf_vol));
-				c = 0;
-				s++;
-				memset(buf_name, '\0', 128);
+				chan = ((int)str[++j]) - 49;
+				new_line = false;
+				f_bank = true;
+				i = 0;
+				//printw("Char: %c\nSelected Channel: %d\n", str[j-1], chan);getch();
+			}
+		}
+		else if (f_bank && str[j] == 'B')
+		{
+			bank_index = (int)str[++j] - 49;
+			mix[chan] = initChannel(bank, bank_index);
+			f_bank = false;
+			//printw("Loaded bank file: %s\n", bank[bank_index]->fname);getch();
+		}
+		else if (!f_bank && !new_line && str[j] == '(')
+		{
+			if (str[j + 1] == ')')
+			{
+				mix[chan]->pattern[seq_step++] = NULL;
+				printw("Found empty step\n");
+				//j+=2;
+			}
+			else
+				f_group = true;
+		}
+		else if (f_group)
+		{
+			if (str[j] == ',')
+			{
+				group_attrib++;
+				i = 0;
+			}
+			else if (str[j] == ')')
+			{
+				f_group = false;
+				group_attrib = 0;
+				//printw("Assigning volume value: %f\nSeq_step = %d", atof(buf_vol), seq_step);getch();
+				mix[chan]->pattern[seq_step++] = initStep(atof(buf_vol));
+				//printw("Done\n");
 				memset(buf_vol, '\0', 16);
+				i = 0;
 			}
 			else
 			{
-				fn_flag = false;
-				vol_flag = false;
+				switch (group_attrib)
+				{
+					case 0:
+						buf_vol[i++] = str[j];
+						break;
+				}
 			}
-			c = 0;
 		}
-		else if ((int)str[j] == 59) // new step ;
+		else if (str[j] == ';')
 		{
-			//if (debug) printf("new step ;\n");
-			seq[i++]->sound_c = s;
-			s = 0;
+			
+			i = 0;
+			new_line = true;
+			chan++;
+			seq_step = 0;
 		}
-
-		if (i > 15)
-			return;
-		
 
 	}
+}
+
+int initSDL()
+{
+	if (SDL_Init(SDL_INIT_AUDIO) < 0)
+		return -1;
+
+	if (Mix_OpenAudio(22050, MIX_DEFAULT_FORMAT, 2, 4096) == -1)
+		return -1;
+
+	Mix_AllocateChannels(16);
+	return 0;
 }
 
 /* play a single sample */	
@@ -157,44 +244,14 @@ void *playSequence(void *args)
 	while ((pa->ch) != PAUSE)
 	{
 		//playStep(&(pa->seq[(pa->i)]));
-		if (pa->com[pa->i] != NULL)
-			system(pa->com[pa->i]);
+		// if (pa->mix[pa->i] != NULL)
+		// 	system(pa->com[pa->i]);
+		for (int i = 0; i < 16; i++)
+		{
+			if (pa->mix[i]->pattern[pa->i] != NULL)
+				Mix_PlayChannel(i, pa->mix[i]->sound->chunk, 0);
+		}
 		usleep((int)((pa->steps)));
 		(pa->i) = ((pa->i) < 15) ? (pa->i)+1 : 0;
-	}
-}
-
-/* generates sox commands for playing sounds on linux */
-char * gen_command(Step *st)
-{
-	if (st->sound_c == 0)
-	{
-		return NULL;
-	}
-	else if (st->sound_c == 1)
-	{
-		char *output = (char*)malloc(sizeof(char)*512);
-		sprintf(output, "play -v %f %s -q &", st->sounds[0]->vol, st->sounds[0]->fname);
-		//system(output);
-		return output;
-	}
-	else
-	{
-		char *output = (char*)malloc(sizeof(char)*128*(st->sound_c)),
-			 *single = (char*)malloc(sizeof(char)*128);
-		strcpy(output, "play -V0 -m ");
-		for (int i = 0; i < st->sound_c; i++)
-		{
-			sprintf(single, " -v %f %s ", st->sounds[i]->vol, st->sounds[i]->fname);
-			//printw(" - %s -\n", st->sounds[i]);
-			strcat(output, single);
-		}
-		strcat(output, " -q &");
-		free(single);
-		//printf("%s\n", output);
-		//system(output);
-		//endwin();
-		//exit(0);
-		return output;
 	}
 }

@@ -118,19 +118,16 @@ void mainMenu()
 {
 	initscr();
 	raw();
+	if (initSDL() == -1)
+	{
+		printw("Unable to init SDL\n");
+		endwin();
+	}
 	int ch = 0;
 	float tempo = 120;
 
 	clear();
 	refresh();
-
-	//Step sequance to be played
-	Step *seq[16];
-	//initialize all steps
-	for (int i = 0; i < 16; i++)
-		seq[i] = initStep();
-	if (debug) printf("before fn call\n");
-	importSequence("2.track", seq);
 
 	keypad(stdscr, TRUE);
 	//menu relative vars
@@ -191,158 +188,220 @@ void mainMenu()
 
 void patternEditor(float tempo, int ch, int d_iter)
 {
-	Step *seq[16];
-	//initialize all steps
+	clear();
+	refresh();
+	Channel *mix[16];
+	Sample *bank[16];
 	for (int i = 0; i < 16; i++)
-		seq[i] = initStep();
-	if (debug) printf("before fn call\n");
-	importSequence("2.track", seq);
+		mix[i] = NULL;
+	printw("Loading bank\n"); getch();
+	loadSampleBank("1.bank", bank);
+	for (int i = 0; i < 3; i++)
+		printw("Bank sound %d: %s\n", i, bank[i]->fname);
+	printw("Loading sequence\n");getch();
+	importSequence("2.track", mix, bank);
+	char *bank_name = "1.bank";
 	
 	d_iter = 0, ch = 0;
-	int select = 0, chan = 0;
+	int select = 0, chan = 0, bank_selected = 0, sound = 0;
 
+	enum modes {SELECT, COMPOSE, EDIT};
+	enum modes mode = SELECT;
 
 	while (ch != 113)
 	{
 		bool empty = false;
 		clear();
 		refresh();
-		printw("Tempo: %d bpm | 'p' - play/pause\n", (int)tempo);
-		for (int h = 0; h < 16; h++)
+		attron(A_UNDERLINE);
+		printw("Tempo: %d bpm | 'p' - play/pause\n\n", (int)tempo);//getch();
+		attroff(A_UNDERLINE);
+		for (int i = 0; i < 16; i++)
 		{
-			if ((h) % 4 == 0 || h == 0)
-				attron(A_STANDOUT);
-			if (select == h)
-				printw("[X]");
+			if (mode == SELECT && select == i)
+				attron(A_BOLD);
+			if (mix[chan] != NULL && mix[chan]->pattern[i] != NULL)
+				printw("[*]");
 			else
 				printw("[ ]");
-			attroff(A_STANDOUT);
+			attroff(A_BOLD);
+		}//getch();
+		printw("\n\nThe current Sample Bank is: %s\nMode: %d\n", bank_name, mode);
+		if (mode == COMPOSE)
+		{
+			printw("The current selected sample is: %s", mix[chan]->sound->fname);
+			printw("Press TAB to exit...");
+		}
+		else if (mode == EDIT)
+		{
+			printw("Press step to edit..\n");
+			if (mix[chan]->pattern[select] == NULL)
+				printw("This is an empty step!\n");
+			else
+			{
+				printw("Sample:\t%s\n", mix[chan]->sound->fname);
+				printw("Velocity:\t%f\n", mix[chan]->pattern[select]->vol);
+				printw("Hold:\t%%100\n");
+				printw("Pitch:\t~0\n");
+				printw("Treble:\t1\t\n");
+				printw("Mid:\t1\n");
+				printw("Bass:\t1\n");
+			}
+		}
+		else if (mode == SELECT)
+		{
+			printw("Select channel to edit\n");
+			for (int i = 0; i < 16; i++)
+			{
+				printw("%d:\t", i);
+				if (mix[i] != NULL)
+					printw("%s\n", mix[i]->sound->fname);
+				else
+					printw("empty\n");
+			}			
 		}
 
-
-		if (seq[select]->sound_c > 0)
+		ch = handleFuckingButtons(ch);
+		//printw("Handled buttons, ch = %d\n", ch);//getch();
+		bool skip = true;
+		if (ch == CHANGEMODE)
 		{
-			if (d_iter == 0) attron(A_BOLD);
-			printw("\n\nStep: %d/16\n", select + 1);
-			attroff(A_BOLD);
-			empty = false;
-			if (d_iter == 1) attron(A_BOLD);
-			printw("Channel %d/%d\n\n", chan + 1, seq[select]->sound_c);
-			attroff(A_BOLD);
-			if (d_iter == 2) attron(A_BOLD);
-			printw("Sample Path:\t%s\n", seq[select]->sounds[chan]->fname);
-			attroff(A_BOLD);
-			if (d_iter == 3) attron(A_BOLD);
-			printw("Velocity:\t%f\n", seq[select]->sounds[chan]->vol);
-			attroff(A_BOLD);
-			if (d_iter == 4) attron(A_BOLD);
-			printw("Accent:\t\t0.5\n");
-			attroff(A_BOLD);
-			if (d_iter == 5) attron(A_BOLD);
-			printw("Bass:\t\t1\n");
-			attroff(A_BOLD);
-			if (d_iter == 6) attron(A_BOLD);
-			printw("Treble:\t\t1\n");
-			attroff(A_BOLD);
-			if (d_iter == 7) attron(A_BOLD);
-			printw("Hold:\t\t100%%\n");
-			attroff(A_BOLD);
-			if (d_iter == 8) attron(A_BOLD);
-			printw("\n[Add Channel] ");
-			attroff(A_BOLD);
-			if (d_iter == 9) attron(A_BOLD);
-			printw(" [Remove Channel]");
-			attroff(A_BOLD);
+			switch (mode)
+			{
+				case COMPOSE:
+					mode = SELECT;
+					select = 0;
+					break;
+				case SELECT:
+					//printw("Here\n");getch();
+					mode = EDIT;
+					printw("Mode: %d", mode);getch();
+					//skip = false;
+					break;
+				case EDIT:
+					mode = COMPOSE;
+					skip = false;
+					break;
+			}
+		}
+		else if (ch == PLAY)
+		{
+			playingDisplay(tempo, ch, mix);
+		}
+		if (!skip)
+		{
+			clear();
+			refresh();
+			printw("Entering compose mode, select bank patch (1-16)\n");
+			for (int i = 0; i < 16; i++)
+			{
+				printw("%d:\t", i);
+				if (mix[i] != NULL)
+					printw("%s\n", mix[i]->sound->fname);
+				else
+					printw("empty\n");
+			}
+			ch = handleFuckingButtons(ch);
+			if (ch > 15 || bank[ch] == NULL)
+			{
+				if (ch != CHANGEMODE)
+				{
+					printw("Cannot load empty bank slot, returning to select mode..\n");
+					sleep(3);
+				}
+				mode = SELECT;
+				select = 0;
+			}
+			else
+			{
+				chan = ch;
+			}
 		}
 		else
 		{
-			if (d_iter > 1)
-				d_iter = 0;
-			empty = true;
-			if (d_iter == 0) attron(A_BOLD);
-			printw("\n\nStep: %d/16\n", select + 1);
-			attroff(A_BOLD);
-			if (d_iter == 1) attron(A_BOLD);
-			printw("[New Step]\n");
-			attroff(A_BOLD);
-		}
-		ch = getch();
-		clear();
-		refresh();
-		char fbuf[512];
-		switch(ch)
-		{
-			case KEY_UP:
-				d_iter = d_iter > 0 ? d_iter-1 : d_iter;
-				break;
-			case KEY_DOWN:
-				if (seq[select]->sound_c != 0)
-					d_iter = d_iter < 9 ? d_iter+1 : d_iter;
+			if (mode == SELECT && ch >= 0 && ch < 16)
+				chan = ch;
+			else if (mode = COMPOSE && ch >= 0 && ch < 16)
+			{
+				if (mix[chan]->pattern[ch] == NULL)
+				{
+					mix[chan]->pattern[ch] = initStep(1.0);
+				}
 				else
-					d_iter = d_iter < 1 ? d_iter+1 : d_iter;
-				break;
-			case KEY_LEFT:
-				switch (d_iter)
 				{
-					case 0:
-						select = select > 0 ? select-1 : select;
-						chan = 0;
-						break;
-					case 1:
-						chan = chan > 0 ? chan-1 : chan;
-						break;
-					case 2:
-						break;
-					case 3:
-						if (seq[select]->sounds[chan]->vol > 0.1) seq[select]->sounds[chan]->vol -= 0.1;
-						break;
+					destroyStep(mix[chan]->pattern[ch]);
 				}
-				break;
-			case KEY_RIGHT:
-				switch (d_iter)
-				{
-					case 0:
-						select = select < 15 ? select+1 : select;
-						chan = 0;
-						break;
-					case 1:
-						chan = chan < seq[select]->sound_c - 1 ? chan+1 : chan;
-						break;
-					case 2:
-						break;
-					case 3:
-						if (seq[select]->sounds[chan]->vol < 1.5) seq[select]->sounds[chan]->vol += 0.1;
-						break;
-				}
-				break;
-			case DELETE: 
-					if (!empty)
-					{
-						if (chan + 1 != seq[select]->sound_c)
-						{
-							while (chan < seq[select]->sound_c - 1)
-							{
-								seq[select]->sounds[chan] = seq[select]->sounds[chan+1];
-								chan++;
-							}
-						}
-						//free(seq[select].sounds[seq[select].sound_c].fname);
-						seq[select]->sound_c--;
-						chan = 0;
-					}
-					break;
-			case PLAY:
-				playingDisplay(tempo, ch, seq);
-				break;
-			case 109:
-				for (int j = 0; j < 16; j++)
-					destroyStep(seq[j]);
-				return;
+			}
+			else if (mode == EDIT && ch >= 0 && ch < 16)
+			{
+				select = ch;
+			}
 		}
+		//printw("Channel = %d\n", chan);getch();
 	}
 }
 
-void playingDisplay(float tempo, int ch, Step *seq[16])
+static int handleFuckingButtons(int ch)
+{
+	int select;
+	ch = getch();
+	switch(ch)
+	{
+		case B1:
+			select = 0;
+			break;
+		case B2:
+			select = 1;
+			break;
+		case B3:
+			select = 2;
+			break;
+		case B4:
+			select = 3;
+			break;
+		case B5:
+			select = 4;
+			break;
+		case B6:
+			select = 5;
+			break;
+		case B7:
+			select = 6;
+			break;
+		case B8:
+			select = 7;
+			break;
+		case B9:
+			select = 8;
+			break;
+		case B10:
+			select = 9;
+			break;
+		case B11:
+			select = 10;
+			break;
+		case B12:
+			select = 11;
+			break;
+		case B13:
+			select = 12;
+			break;
+		case B14:
+			select = 13;
+			break;
+		case B15:
+			select = 14;
+			break;
+		case B16:
+			select = 15;
+			break;
+		default:
+			return ch;
+	}
+	return select;
+}
+
+void playingDisplay(float tempo, int ch, Channel *mix[16])
 {
 	nodelay(stdscr, TRUE);
 	int i = 0, prev = i;
@@ -356,8 +415,7 @@ void playingDisplay(float tempo, int ch, Step *seq[16])
 	//pa.seq = seq;
 	for (int j = 0; j < 16; j++)
 	{
-		pa.com[j] = gen_command(seq[j]);
-		pa.seq[j] = seq[j];
+		pa.mix[j] = mix[j];
 	}
 
 	pa.ch = ch;
@@ -405,7 +463,7 @@ void playingDisplay(float tempo, int ch, Step *seq[16])
 		pa.steps = (60/(tempo) * 1000000) / 4;
 	}
 	usleep(steps);
-	destroy_p_args(pa);
+	//destroy_p_args(pa);
 	nodelay(stdscr, FALSE);
 
 	return;
