@@ -9,10 +9,18 @@
 #include <stdio.h>
 #include <unistd.h> 
 #include <ncurses.h>
+#include <time.h>
+
+
+#include <stdint.h>
+#include <signal.h>
+#include <sys/time.h>
 
 //typedef enum { false, true } bool;
 
 bool debug = true;
+
+struct timeval start, last;
 
 /* reserve memory for sample */
 Sample * initSample(char *fn)
@@ -226,32 +234,180 @@ int initSDL()
 	return 0;
 }
 
+static inline int64_t tv_to_u(struct timeval s)
+{
+	return s.tv_sec * 1000000 + s.tv_usec;
+}
+ 
+static inline struct timeval u_to_tv(int64_t x)
+{
+	struct timeval s;
+	s.tv_sec = x / 1000000;
+	s.tv_usec = x % 1000000;
+	return s;
+}
+
+void draw(int dir, int64_t period, int64_t cur, int64_t next)
+{
+	int len = 40 * (next - cur) / period;
+	int s, i;
+ 
+	if (len > 20) len = 40 - len;
+	s = 20 + (dir ? len : -len);
+ 
+	printf("\033[H");
+	for (i = 0; i <= 40; i++) putchar(i == 20 ? '|': i == s ? '#' : '-');
+}
+ 
+// void beat(int delay)
+// {
+// 	Mix_Chunk *chunk;
+// 	chunk = Mix_LoadWAV("hat.wav");
+// 	struct timeval tv = start;
+// 	int dir = 0;
+// 	int64_t d = 0, corr = 0, slp, cur, next = tv_to_u(start) + delay;
+// 	int64_t draw_interval = 20000;
+// 	printf("\033[H\033[J");
+// 	while (1) {
+// 		gettimeofday(&tv, 0);
+// 		slp = next - tv_to_u(tv) - corr;
+// 		usleep(slp);
+// 		gettimeofday(&tv, 0);
+ 
+// 		//putchar(7); /* bell */
+// 		if (Mix_PlayChannel(-1, chunk, 0) == -1)
+// 		{
+// 			printf("%s", Mix_GetError());
+// 			exit(1);
+// 		}
+// 		fflush(stdout);
+ 
+// 		printf("\033[5;1Hdrift: %d compensate: %d (usec)   ",
+// 			(int)d, (int)corr);
+// 		dir = !dir;
+ 
+// 		cur = tv_to_u(tv);
+// 		d = cur - next;
+// 		corr = (corr + d) / 2;
+// 		next += delay;
+ 
+// 		while (cur + d + draw_interval < next) {
+// 			usleep(draw_interval);
+// 			gettimeofday(&tv, 0);
+// 			cur = tv_to_u(tv);
+// 			draw(dir, delay, cur, next);
+// 			fflush(stdout);
+// 		}
+// 	}
+// }
+
 /* play a single sample */	
 void playSample(Sample *s, float *vol)
 {
-	char output[128];
-	sprintf(output, "play -v %f %s -q &", *vol, s->fname); 
-	system(output);
+	if (Mix_PlayChannel(-1, s->chunk, 0) == -1)
+	{
+		printw("SDL+ERROR: %s", Mix_GetError());
+		getch();
+		endwin();
+		exit(1);
+	}
+	printw("Playing sound... ");
+	sleep(3);
+	endwin();
+	exit(0);
 }
 
 /* threaded function for playing a pattern */
 void *playSequence(void *args)
 {
-	/* @param args : argument structure */
+	// /* @param args : argument structure */
+	// struct p_args *pa = args;
+	// clock_t before, after; 
+	// float cpm = CLOCKS_PER_SEC / 1000000;
+	// //printf("Test value, pa->ch = %d", pa->ch);
+	// pa->i = 0;
+	// printw("Playing channel\n");
+	// while ((pa->ch) != PAUSE)
+	// {
+	// 	//playStep(&(pa->seq[(pa->i)]));
+	// 	// if (pa->mix[pa->i] != NULL)
+	// 	// 	system(pa->com[pa->i]);
+	// 	//before = clock(); 
+	// 	// for (int i = 0; i < 16; i++)
+	// 	// {
+	// 	// 	if (pa->mix[i] != NULL && pa->mix[i]->pattern != NULL && pa->mix[i]->pattern[pa->i] != NULL)
+	// 	// 	{
+	// 	// 		if (Mix_PlayChannel(i, pa->mix[i]->sound->chunk, 0) == -1)
+	// 	// 		{
+	// 	// 			printw("SDL+ERROR: %s", Mix_GetError());
+	// 	// 			getch();
+	// 	// 			endwin();
+	// 	// 			exit(1);
+	// 	// 		}
+	// 	// 	}
+	// 	// }
+	// 	Mix_PlayChannel(-1, pa->mix[1]->sound->chunk, 0);
+	// 	//after = clock();
+	// 	//mvprintw(5,  5, "Clocks per second: %d\nClocks per micosecond: %f\n(a-b): %d\nBefore: %d\nAfter: %d\n", CLOCKS_PER_SEC,cpm,(after - before), before, after);
+	// 	//usleep((int)((pa->steps) - ((after - before))));
+	// 	usleep((int)pa->steps);
+	// 	(pa->i) = ((pa->i) < 15) ? (pa->i)+1 : 0;
+	// }
+	// Mix_HaltChannel(-1);
 	struct p_args *pa = args;
-	//printf("Test value, pa->ch = %d", pa->ch);
-	pa->i = 0;
-	while ((pa->ch) != PAUSE)
+	struct timeval tv = start;
+	int dir = 0;
+	int delay = 60 * 1000000 / pa->tempo;
+	int64_t d = 0, corr = 0, slp, cur, next = tv_to_u(start) + delay;
+	int64_t draw_interval = 20000;
+	//printf("\033[H\033[J");
+	
+	while (pa->ch != PAUSE) 
 	{
-		//playStep(&(pa->seq[(pa->i)]));
-		// if (pa->mix[pa->i] != NULL)
-		// 	system(pa->com[pa->i]);
+		printw("Delay: %d\nnext: %d\nTempo: %d\ntv_to_u(tv): %d\n", delay, next, pa->tempo, tv_to_u(tv));
+		gettimeofday(&tv, 0);
+		printw("Updated tv to u: %d\n",tv_to_u(tv));
+		slp = next - tv_to_u(tv) - corr;
+		printw("Sleep: %d", slp);
+		usleep(slp);
+		gettimeofday(&tv, 0);
+		//nodelay(stdscr, FALSE);
+		//getch();
+		
 		for (int i = 0; i < 16; i++)
 		{
-			if (pa->mix[i]->pattern[pa->i] != NULL)
-				Mix_PlayChannel(i, pa->mix[i]->sound->chunk, 0);
+			if (pa->mix[i] != NULL && pa->mix[i]->pattern != NULL && pa->mix[i]->pattern[pa->i] != NULL)
+			{
+				if (Mix_PlayChannel(i, pa->mix[i]->sound->chunk, 0) == -1)
+				{
+					printw("SDL+ERROR: %s", Mix_GetError());
+					getch();
+					endwin();
+					exit(1);
+				}
+			}
 		}
-		usleep((int)((pa->steps)));
+		printw("Tick \n");
 		(pa->i) = ((pa->i) < 15) ? (pa->i)+1 : 0;
+		delay = 60 * 1000000 / pa->tempo;
+
+		//fflush(stdout);
+ 
+		//printf("\033[5;1Hdrift: %d compensate: %d (usec)   ",
+		//	(int)d, (int)corr);
+		dir = !dir;
+ 
+		cur = tv_to_u(tv);
+		d = cur - next;
+		corr = (corr + d) / 2;
+		next += delay;
+ 
+		while (cur + d + draw_interval < next) {
+			usleep(draw_interval);
+			gettimeofday(&tv, 0);
+			cur = tv_to_u(tv);
+			//fflush(stdout);
+		}
 	}
+	Mix_HaltChannel(-1);
 }

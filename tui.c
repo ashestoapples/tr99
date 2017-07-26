@@ -176,7 +176,7 @@ void mainMenu()
 
 				}
 				break;
-			case DELETE:
+			case NO:
 				endwin();
 				return;
 				break;
@@ -194,11 +194,9 @@ void patternEditor(float tempo, int ch, int d_iter)
 	Sample *bank[16];
 	for (int i = 0; i < 16; i++)
 		mix[i] = NULL;
-	printw("Loading bank\n"); getch();
 	loadSampleBank("1.bank", bank);
 	for (int i = 0; i < 3; i++)
 		printw("Bank sound %d: %s\n", i, bank[i]->fname);
-	printw("Loading sequence\n");getch();
 	importSequence("2.track", mix, bank);
 	char *bank_name = "1.bank";
 	
@@ -218,13 +216,13 @@ void patternEditor(float tempo, int ch, int d_iter)
 		attroff(A_UNDERLINE);
 		for (int i = 0; i < 16; i++)
 		{
-			if (mode == SELECT && select == i)
-				attron(A_BOLD);
+			if (mode == EDIT && select == i)
+				attron(A_STANDOUT);
 			if (mix[chan] != NULL && mix[chan]->pattern[i] != NULL)
 				printw("[*]");
 			else
 				printw("[ ]");
-			attroff(A_BOLD);
+			attroff(A_STANDOUT);
 		}//getch();
 		printw("\n\nThe current Sample Bank is: %s\nMode: %d\n", bank_name, mode);
 		if (mode == COMPOSE)
@@ -275,7 +273,7 @@ void patternEditor(float tempo, int ch, int d_iter)
 				case SELECT:
 					//printw("Here\n");getch();
 					mode = EDIT;
-					printw("Mode: %d", mode);getch();
+					//printw("Mode: %d", mode);getch();
 					//skip = false;
 					break;
 				case EDIT:
@@ -283,11 +281,14 @@ void patternEditor(float tempo, int ch, int d_iter)
 					skip = false;
 					break;
 			}
+			//printw("Mode will be %d\n", mode); getch();
 		}
 		else if (ch == PLAY)
 		{
 			playingDisplay(tempo, ch, mix);
 		}
+		else if (ch == NO)
+			return;
 		if (!skip)
 		{
 			clear();
@@ -321,7 +322,7 @@ void patternEditor(float tempo, int ch, int d_iter)
 		{
 			if (mode == SELECT && ch >= 0 && ch < 16)
 				chan = ch;
-			else if (mode = COMPOSE && ch >= 0 && ch < 16)
+			else if (mode == COMPOSE && ch >= 0 && ch < 16)
 			{
 				if (mix[chan]->pattern[ch] == NULL)
 				{
@@ -330,6 +331,7 @@ void patternEditor(float tempo, int ch, int d_iter)
 				else
 				{
 					destroyStep(mix[chan]->pattern[ch]);
+					mix[chan]->pattern[ch] = NULL;
 				}
 			}
 			else if (mode == EDIT && ch >= 0 && ch < 16)
@@ -403,6 +405,7 @@ static int handleFuckingButtons(int ch)
 
 void playingDisplay(float tempo, int ch, Channel *mix[16])
 {
+	//playSample(mix[0]->sound, 0);
 	nodelay(stdscr, TRUE);
 	int i = 0, prev = i;
 	//printf("Before float operation\n");
@@ -417,15 +420,17 @@ void playingDisplay(float tempo, int ch, Channel *mix[16])
 	{
 		pa.mix[j] = mix[j];
 	}
-
+	printw("Mix attribs copied\n");getch();
 	pa.ch = ch;
 	pa.i = i;
-	pa.steps = steps;
+	pa.tempo = tempo;
 	pthread_t player;
 	//printf("Before pthread create\n;");
 	pthread_create(&player, NULL, &playSequence, (void *)&pa);
+	printw("Thread created\n");//getch();
 	while (pa.ch != PAUSE)
 	{
+		//printw("LOOP\n");
 		//playStep(&(seq[i]));
 		//steps = ;
 		if (pa.i != prev)
@@ -433,7 +438,7 @@ void playingDisplay(float tempo, int ch, Channel *mix[16])
 			clear();
 			refresh();
 			prev = pa.i;
-			printw("Tempo: %d\tSteps: %d\n", (int)tempo, (int)pa.steps);
+			printw("Tempo: %d\n", (int)tempo);
 			for (int j = 0; j < 16; j++)
 			{
 				if ((j) % 4 == 0 && j != 15 || j == 0)
@@ -454,13 +459,13 @@ void playingDisplay(float tempo, int ch, Channel *mix[16])
 		switch(pa.ch)
 		{
 			case KEY_UP:
-				tempo++;
+				pa.tempo++;
 				break;
 			case KEY_DOWN:
-				tempo--;
+				pa.tempo--;
 				break;
 		}
-		pa.steps = (60/(tempo) * 1000000) / 4;
+		//pa.steps = (60/(tempo) * 1000000) / 4;
 	}
 	usleep(steps);
 	//destroy_p_args(pa);

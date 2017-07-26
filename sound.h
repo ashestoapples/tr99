@@ -1,6 +1,15 @@
 #ifndef SOUND_H_INCLUDED
 #define SOUND_H_INCLUDED
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <stdint.h>
+#include <signal.h>
+#include <time.h>
+#include <sys/time.h>
+ 
+
 #include "SDL_mixer.h"
 
 /* struct containing sample path and attributes */
@@ -26,7 +35,7 @@ typedef struct channel
 struct p_args
 {
 	Channel *mix[16]; //Step sequence to be played
-	float steps;   //miliseconds between playing steps, this controls the tempo of the pattern
+	int tempo;   //miliseconds between playing steps, this controls the tempo of the pattern
 	int ch,		   //input char 
 		i;		   //used to tell the display which Step the clock is on
 };
@@ -61,5 +70,10 @@ void *playSequence(void *args);
 
 /* play a single sample */
 void playSample(Sample *s, float *vol);
+
+/* metronome relative functions */
+static inline int64_t tv_to_u(struct timeval s);
+static inline struct timeval u_to_tv(int64_t x);
+//void beat(int delay);
 
 #endif
