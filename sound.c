@@ -227,7 +227,7 @@ int initSDL()
 	if (SDL_Init(SDL_INIT_AUDIO) < 0)
 		return -1;
 
-	if (Mix_OpenAudio(22050, MIX_DEFAULT_FORMAT, 2, 4096) == -1)
+	if (Mix_OpenAudio(44100, MIX_DEFAULT_FORMAT, 2, 1024) == -1)
 		return -1;
 
 	Mix_AllocateChannels(16);
@@ -354,9 +354,13 @@ void *playSequence(void *args)
 	// 	(pa->i) = ((pa->i) < 15) ? (pa->i)+1 : 0;
 	// }
 	// Mix_HaltChannel(-1);
+	gettimeofday(&start, 0);
+	last = start;
 	struct p_args *pa = args;
 	struct timeval tv = start;
+	gettimeofday(&start, 0);
 	int dir = 0;
+	pa->tempo = (pa->tempo)*4;
 	int delay = 60 * 1000000 / pa->tempo;
 	int64_t d = 0, corr = 0, slp, cur, next = tv_to_u(start) + delay;
 	int64_t draw_interval = 20000;
@@ -364,11 +368,11 @@ void *playSequence(void *args)
 	
 	while (pa->ch != PAUSE) 
 	{
-		printw("Delay: %d\nnext: %d\nTempo: %d\ntv_to_u(tv): %d\n", delay, next, pa->tempo, tv_to_u(tv));
+		//printw("Delay: %d\nnext: %d\nTempo: %d\ntv_to_u(tv): %d\n", delay, next, pa->tempo, tv_to_u(tv));
 		gettimeofday(&tv, 0);
-		printw("Updated tv to u: %d\n",tv_to_u(tv));
+		//printw("Updated tv to u: %d\n",tv_to_u(tv));
 		slp = next - tv_to_u(tv) - corr;
-		printw("Sleep: %d", slp);
+		//printw("Sleep: %d", slp);
 		usleep(slp);
 		gettimeofday(&tv, 0);
 		//nodelay(stdscr, FALSE);
@@ -387,13 +391,13 @@ void *playSequence(void *args)
 				}
 			}
 		}
-		printw("Tick \n");
+		//printw("Tick \n");
 		(pa->i) = ((pa->i) < 15) ? (pa->i)+1 : 0;
 		delay = 60 * 1000000 / pa->tempo;
 
 		//fflush(stdout);
  
-		//printf("\033[5;1Hdrift: %d compensate: %d (usec)   ",
+		//printw("\033[5;1Hdrift: %d compensate: %d (usec)   ",
 		//	(int)d, (int)corr);
 		dir = !dir;
  
@@ -402,12 +406,12 @@ void *playSequence(void *args)
 		corr = (corr + d) / 2;
 		next += delay;
  
-		while (cur + d + draw_interval < next) {
-			usleep(draw_interval);
-			gettimeofday(&tv, 0);
-			cur = tv_to_u(tv);
-			//fflush(stdout);
-		}
+		// while (cur + d + draw_interval < next) {
+		// 	usleep(draw_interval);
+		// 	gettimeofday(&tv, 0);
+		// 	cur = tv_to_u(tv);
+		// 	//fflush(stdout);
+		// }
 	}
 	Mix_HaltChannel(-1);
 }
