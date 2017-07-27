@@ -133,7 +133,10 @@ void mainMenu()
 	//menu relative vars
 	int select = 0, //current selected item
 		chan = 0, 	//current selected channel
-		d_iter = 0; 
+		d_iter = 0;
+	int bank_name = -1;
+	Sample *bank[16]; 
+	Channel *mix[16];
 		
 	clear();
 	refresh();
@@ -152,6 +155,9 @@ void mainMenu()
 		printw("\tLoad Sound Bank\n");
 		attroff(A_STANDOUT);
 		if (d_iter == 2) attron(A_STANDOUT);
+		printw("\tLoad Pattern Bank\n");
+		attroff(A_STANDOUT);
+		if (d_iter == 3) attron(A_STANDOUT);
 		printw("\tGlobal Settings\n");
 		attroff(A_STANDOUT);
 		ch = getch();
@@ -161,15 +167,19 @@ void mainMenu()
 				d_iter = (d_iter > 0) ? d_iter-1 : d_iter;
 				break;
 			case KEY_DOWN:
-				d_iter = (d_iter < 2) ? d_iter+1 : d_iter;
+				d_iter = (d_iter < 3) ? d_iter+1 : d_iter;
 				break;
 			case YES:
 				switch (d_iter)
 				{
 					case 0:
-						patternEditor(tempo, ch, d_iter);
+						if (bank_name != -1)
+						{
+							patternEditor(tempo, ch, d_iter, mix, bank, bank_name);
+						}
 						break;
 					case 1:
+						bank_name = bankSelection(bank, bank_name);
 						break;
 					case 2:
 						break;
@@ -186,19 +196,72 @@ void mainMenu()
 
 }
 
-void patternEditor(float tempo, int ch, int d_iter)
+int bankSelection(Sample *bank[16], int bankNumber)
+{
+	if (bankNumber != -1)
+	{
+		for (int i = 0; i < 16; i++)
+		{
+			if (bank[i] != NULL)
+				destroySample(bank[i]);
+		}
+	}
+	clear();
+	refresh();
+	printw("Select bank: (1-16): ");
+	int ch = -1;
+	while (ch < 0 || ch > 15)
+		ch = handleFuckingButtons(0);
+	ch++;
+	bankNumber = ch;
+	char bank_path[32], full_path[512] ;
+	sprintf(bank_path, "banks/%d/", ch);
+	DIR *dir;
+	int i = 0;
+	struct dirent *ent;
+	if ((dir = opendir(bank_path)) != NULL)
+	{
+		while ((ent = readdir(dir)) != NULL)
+		{
+			if (strcmp(ent->d_name, "..") != 0 && strcmp(ent->d_name, ".") != 0)
+			{
+				sprintf(full_path, "%s%s\0", bank_path, ent->d_name);
+				printw("Full->%s\n", full_path);
+				bank[i++] = initSample(full_path);
+				if (bank[i-1] == NULL)
+					printw("bank->%s\n", bank[i-1]->fname);
+				memset(full_path, '\0', 128);
+				if (i > 15)
+					break;
+			}
+		}
+	}
+	for (; i < 16; i++)
+		bank[i] = NULL;
+	//getch();
+	return ch;
+}
+
+void patternEditor(float tempo, int ch, int d_iter, Channel *mix[16], Sample *bank[16], int bank_name)
 {
 	clear();
 	refresh();
-	Channel *mix[16];
-	Sample *bank[16];
 	for (int i = 0; i < 16; i++)
-		mix[i] = NULL;
-	loadSampleBank("1.bank", bank);
-	for (int i = 0; i < 3; i++)
-		printw("Bank sound %d: %s\n", i, bank[i]->fname);
-	importSequence("2.track", mix, bank);
-	char *bank_name = "1.bank";
+	{
+		if (bank[i] != NULL)
+			mix[i] = initChannel(bank, i);
+		else
+			mix[i] = NULL;
+	}
+	//Channel *mix[16];
+	//Sample *bank[16];
+	// for (int i = 0; i < 16; i++)
+	// 	mix[i] = NULL;
+	// loadSampleBank("1.bank", bank);
+	// for (int i = 0; i < 3; i++)
+	// 	printw("Bank sound %d: %s\n", i, bank[i]->fname);
+	// importSequence("2.track", mix, bank);
+	//char *bank_name = "1.bank";
 	
 	d_iter = 0, ch = 0;
 	int select = 0, chan = 0, bank_selected = 0, sound = 0;
@@ -224,7 +287,7 @@ void patternEditor(float tempo, int ch, int d_iter)
 				printw("[ ]");
 			attroff(A_STANDOUT);
 		}//getch();
-		printw("\n\nThe current Sample Bank is: %s\nMode: %d\n", bank_name, mode);
+		printw("\n\nThe current Sample Bank is: %d\nMode: %d\n", bank_name, mode);
 		if (mode == COMPOSE)
 		{
 			printw("The current selected sample is: %s", mix[chan]->sound->fname);
@@ -252,8 +315,8 @@ void patternEditor(float tempo, int ch, int d_iter)
 			for (int i = 0; i < 16; i++)
 			{
 				printw("%d:\t", i);
-				if (mix[i] != NULL)
-					printw("%s\n", mix[i]->sound->fname);
+				if (bank[i] != NULL)
+					printw("%s\n", bank[i]->fname);
 				else
 					printw("empty\n");
 			}			
@@ -297,8 +360,8 @@ void patternEditor(float tempo, int ch, int d_iter)
 			for (int i = 0; i < 16; i++)
 			{
 				printw("%d:\t", i);
-				if (mix[i] != NULL)
-					printw("%s\n", mix[i]->sound->fname);
+				if (bank[i] != NULL)
+					printw("%s\n", bank[i]->fname);
 				else
 					printw("empty\n");
 			}
@@ -326,7 +389,7 @@ void patternEditor(float tempo, int ch, int d_iter)
 			{
 				if (mix[chan]->pattern[ch] == NULL)
 				{
-					mix[chan]->pattern[ch] = initStep(1.0);
+					mix[chan]->pattern[ch] = initStep(128);
 				}
 				else
 				{
@@ -334,9 +397,20 @@ void patternEditor(float tempo, int ch, int d_iter)
 					mix[chan]->pattern[ch] = NULL;
 				}
 			}
-			else if (mode == EDIT && ch >= 0 && ch < 16)
+			else if (mode == EDIT)
 			{
-				select = ch;
+				if (ch >= 0 && ch < 16)
+					select = ch;
+				else
+				{
+					if (mix[chan]->pattern[select] != NULL)
+					{
+						if (ch == KEY_UP && mix[chan]->pattern[select]->vol  < 128)
+							mix[chan]->pattern[select]->vol+=4;
+						else if (ch == KEY_DOWN && mix[chan]->pattern[select]->vol > 4)
+							mix[chan]->pattern[select]->vol-=4;
+					}
+				}
 			}
 		}
 		//printw("Channel = %d\n", chan);getch();
@@ -438,7 +512,7 @@ void playingDisplay(float tempo, int ch, Channel *mix[16])
 			clear();
 			refresh();
 			prev = pa.i;
-			printw("Tempo: %d\n", (int)tempo);
+			printw("Tempo: %d\n", (int)(pa.tempo/4));
 			for (int j = 0; j < 16; j++)
 			{
 				if ((j) % 4 == 0 && j != 15 || j == 0)
@@ -459,10 +533,10 @@ void playingDisplay(float tempo, int ch, Channel *mix[16])
 		switch(pa.ch)
 		{
 			case KEY_UP:
-				pa.tempo++;
+				pa.tempo+=4;
 				break;
 			case KEY_DOWN:
-				pa.tempo--;
+				pa.tempo-=4;
 				break;
 		}
 		//pa.steps = (60/(tempo) * 1000000) / 4;

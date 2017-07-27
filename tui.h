@@ -22,7 +22,8 @@ void fileBrowse(char buf[128]);
 static int handleFuckingButtons(int ch);
 
 void mainMenu();
-void patternEditor(float tempo, int ch, int d_iter);
+void patternEditor(float tempo, int ch, int d_iter, Channel *mix[16], Sample *bank[16], int bank_name);
 void playingDisplay(float tempo, int ch, Channel *mix[16]);
+int bankSelection(Sample *bank[16], int bankNumber);
 
 #endif
