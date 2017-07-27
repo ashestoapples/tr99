@@ -51,12 +51,13 @@ void loadSampleBank(char *fn, Sample *bank[16]);
 void destroySample(Sample *ptr);
 
 /* reserve memory for Step struct */
-Step * initStep(float vol);
+Step * initStep(int vol);
 
 /* free memory from Step struct */
 void destroyStep(Step *ptr);
 
-/* frees p_arg memory */
+Channel * initChannel(Sample *bank[16], int bank_index);
+
 void destroy_p_args(struct p_args pa);
 
 /* create 16 step seq from .track file, refer to REAMME for track file syntax */

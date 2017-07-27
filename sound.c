@@ -28,12 +28,16 @@ Sample * initSample(char *fn)
 	//if (Mix_OpenAudio(22050, MIX_DEFAULT_FORMAT, 8, 4096) == -1)
 	//	printw("SDL_error: %s\n", Mix_GetError());
 	Sample *ptr = (Sample*)malloc(sizeof(Sample));
-	ptr->fname = (char*)malloc(sizeof(char)*128);
+	ptr->fname = (char*)malloc(sizeof(char)*512);
 	strcpy(ptr->fname, fn);
 	//printf("%s\n", ptr->fname);
 	ptr->chunk = Mix_LoadWAV(fn);
 	if (ptr->chunk == NULL)
+	{
+		if (debug)
+			printw("SDL_Error: %s\n", Mix_GetError());
 		destroySample(ptr);
+	}
 	return ptr;
 }
 
@@ -46,7 +50,7 @@ void destroySample(Sample *ptr)
 }
 
 /* reserve memory for Step struct */
-Step * initStep(float vol)
+Step * initStep(int vol)
 {
 	Step *ptr = (Step*)malloc(sizeof(Step));
 	ptr->vol = vol;
@@ -105,7 +109,8 @@ void loadSampleBank(char *fn, Sample *bank[16])
 	char *str = malloc(fsize + 1);
 	fread(str,fsize, 1, fp);
 	fclose(fp);
-	
+	for (int i = 0; i < 16; i++)
+		bank[i] = NULL;
 	char *name_buf = malloc(sizeof(char)*128);
 
 	int j = 0, k = 0;
@@ -220,6 +225,13 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 		}
 
 	}
+	for (int j = 0; j < 16; j++)
+	{
+		if (mix[j] == NULL && bank[j] != NULL)
+		{
+			mix[j] = initChannel(bank, j);
+		}
+	}
 }
 
 int initSDL()
@@ -304,6 +316,7 @@ void *playSequence(void *args)
 		{
 			if (pa->mix[i] != NULL && pa->mix[i]->pattern != NULL && pa->mix[i]->pattern[pa->i] != NULL)
 			{
+				Mix_Volume(i, pa->mix[i]->pattern[pa->i]->vol);
 				if (Mix_PlayChannel(i, pa->mix[i]->sound->chunk, 0) == -1)
 				{
 					printw("SDL+ERROR: %s", Mix_GetError());
