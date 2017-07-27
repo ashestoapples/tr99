@@ -74,6 +74,5 @@ void playSample(Sample *s, float *vol);
 /* metronome relative functions */
 static inline int64_t tv_to_u(struct timeval s);
 static inline struct timeval u_to_tv(int64_t x);
-//void beat(int delay);
 
 #endif
