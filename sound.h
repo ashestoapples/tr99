@@ -72,6 +72,8 @@ void *playSequence(void *args);
 /* play a single sample */
 void playSample(Sample *s, float *vol);
 
+int validateSampleBank(Sample *bank[16]);
+
 /* metronome relative functions */
 static inline int64_t tv_to_u(struct timeval s);
 static inline struct timeval u_to_tv(int64_t x);

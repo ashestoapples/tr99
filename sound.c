@@ -34,8 +34,6 @@ Sample * initSample(char *fn)
 	ptr->chunk = Mix_LoadWAV(fn);
 	if (ptr->chunk == NULL)
 	{
-		if (debug)
-			printw("SDL_Error: %s\n", Mix_GetError());
 		destroySample(ptr);
 	}
 	return ptr;
@@ -232,6 +230,16 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 			mix[j] = initChannel(bank, j);
 		}
 	}
+}
+
+int validateSampleBank(Sample *bank[16])
+{
+	for (int i = 0; i < 16; i++)
+	{
+		if (bank[i] != NULL)
+			return 0;
+	}
+	return -1;
 }
 
 int initSDL()

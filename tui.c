@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <unistd.h> 
+#include <time.h>
 
 #include "sound.h"
 #include "keyboard.h"
@@ -114,13 +115,32 @@ static void file_iterate(char name[512], DIR *dir, struct dirent *ent, int offse
 	}
 }
 
-void mainMenu()
+char * timeStamp()
+{
+	time_t cur = time(NULL);
+	char *str_time;
+	if (cur == ((time_t)-1))
+	{
+		return "[Unable to retrive time]";
+	}
+
+	str_time = ctime(&cur);
+
+	if (str_time == NULL)
+	{
+		return "[Unable to format time to string]";
+	}
+
+	return str_time;
+}
+
+void mainMenu(FILE *log)
 {
 	initscr();
 	raw();
 	if (initSDL() == -1)
 	{
-		printw("Unable to init SDL\n");
+		fprintf(log, "%s\nUnable to init SDL\n", timeStamp());
 		endwin();
 	}
 	int ch = 0;
@@ -173,13 +193,15 @@ void mainMenu()
 				switch (d_iter)
 				{
 					case 0:
-						if (bank_name != -1)
+						if (bank_name != -1 && validateSampleBank(bank) != -1)
 						{
-							patternEditor(tempo, ch, d_iter, mix, bank, bank_name);
+							patternEditor(log, tempo, ch, d_iter, mix, bank, bank_name);
 						}
+						else 
+							bank_name = -1;
 						break;
 					case 1:
-						bank_name = bankSelection(bank, bank_name);
+						bank_name = bankSelection(log, bank, bank_name);
 						break;
 					case 2:
 						break;
@@ -196,7 +218,7 @@ void mainMenu()
 
 }
 
-int bankSelection(Sample *bank[16], int bankNumber)
+int bankSelection(FILE *log, Sample *bank[16], int bankNumber)
 {
 	if (bankNumber != -1)
 	{
@@ -205,6 +227,7 @@ int bankSelection(Sample *bank[16], int bankNumber)
 			if (bank[i] != NULL)
 				destroySample(bank[i]);
 		}
+		fprintf(log, "%s\nPurged old sample bank from memory\n", timeStamp());
 	}
 	clear();
 	refresh();
@@ -226,10 +249,11 @@ int bankSelection(Sample *bank[16], int bankNumber)
 			if (strcmp(ent->d_name, "..") != 0 && strcmp(ent->d_name, ".") != 0)
 			{
 				sprintf(full_path, "%s%s\0", bank_path, ent->d_name);
-				printw("Full->%s\n", full_path);
 				bank[i++] = initSample(full_path);
 				if (bank[i-1] == NULL)
-					printw("bank->%s\n", bank[i-1]->fname);
+				{
+					fprintf(log, "%s\nFAILED to load smaple into memory: %s\nReason: %s", timeStamp(), full_path, Mix_GetError());
+				}
 				memset(full_path, '\0', 128);
 				if (i > 15)
 					break;
@@ -242,7 +266,7 @@ int bankSelection(Sample *bank[16], int bankNumber)
 	return ch;
 }
 
-void patternEditor(float tempo, int ch, int d_iter, Channel *mix[16], Sample *bank[16], int bank_name)
+void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16], Sample *bank[16], int bank_name)
 {
 	clear();
 	refresh();
@@ -348,7 +372,7 @@ void patternEditor(float tempo, int ch, int d_iter, Channel *mix[16], Sample *ba
 		}
 		else if (ch == PLAY)
 		{
-			playingDisplay(tempo, ch, mix);
+			playingDisplay(log, tempo, ch, mix);
 		}
 		else if (ch == NO)
 			return;
@@ -477,7 +501,7 @@ static int handleFuckingButtons(int ch)
 	return select;
 }
 
-void playingDisplay(float tempo, int ch, Channel *mix[16])
+void playingDisplay(FILE *log,float tempo, int ch, Channel *mix[16])
 {
 	//playSample(mix[0]->sound, 0);
 	nodelay(stdscr, TRUE);
@@ -534,9 +558,11 @@ void playingDisplay(float tempo, int ch, Channel *mix[16])
 		{
 			case KEY_UP:
 				pa.tempo+=4;
+				tempo++;
 				break;
 			case KEY_DOWN:
 				pa.tempo-=4;
+				tempo--;
 				break;
 		}
 		//pa.steps = (60/(tempo) * 1000000) / 4;
