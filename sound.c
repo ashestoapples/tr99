@@ -132,6 +132,7 @@ void loadSampleBank(char *fn, Sample *bank[16])
 /* create 16 step seq from .track file, refer to REAMME for track file syntax */
 void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 {
+	printw("Openeing: %s\n", fn);getch();
 	FILE *fp = fopen(fn, "rb");
 	fseek(fp, 0, SEEK_END);
 	long fsize = ftell(fp);
@@ -161,7 +162,7 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 		{
 			if (str[j] == 'C')
 			{
-				chan = ((int)str[++j]) - 49;
+				chan = ((int)str[++j]) - 48;
 				new_line = false;
 				f_bank = true;
 				i = 0;
@@ -170,9 +171,21 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 		}
 		else if (f_bank && str[j] == 'B')
 		{
-			bank_index = (int)str[++j] - 49;
-			mix[chan] = initChannel(bank, bank_index);
-			f_bank = false;
+			bank_index = (int)str[++j] - 48;
+			if (bank[bank_index] == NULL)
+			{
+				//printw("NULL BANK @ %d\n", bank_index); getch();
+				i = 0;
+				new_line = true;
+				chan++;
+				seq_step = 0;
+				break;
+			}
+			else
+			{
+				mix[chan] = initChannel(bank, bank_index);
+				f_bank = false;
+			}
 			//printw("Loaded bank file: %s\n", bank[bank_index]->fname);getch();
 		}
 		else if (!f_bank && !new_line && str[j] == '(')
@@ -197,8 +210,8 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 			{
 				f_group = false;
 				group_attrib = 0;
-				//printw("Assigning volume value: %f\nSeq_step = %d", atof(buf_vol), seq_step);getch();
-				mix[chan]->pattern[seq_step++] = initStep(atof(buf_vol));
+				printw("Assigning volume value: %f\nSeq_step = %d", atof(buf_vol), seq_step);getch();
+				mix[chan]->pattern[seq_step++] = initStep(atoi(buf_vol));
 				//printw("Done\n");
 				memset(buf_vol, '\0', 16);
 				i = 0;
@@ -223,10 +236,13 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 		}
 
 	}
+	//printw("exited\n");getch();
 	for (int j = 0; j < 16; j++)
 	{
+		//printw("j = %d\n", j);getch();
 		if (mix[j] == NULL && bank[j] != NULL)
 		{
+			//printw("Cleaning\n");getch();
 			mix[j] = initChannel(bank, j);
 		}
 	}

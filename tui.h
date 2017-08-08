@@ -12,7 +12,7 @@
 
 /* root directory of where we search for pathc files*/
 #define PATCH_ROOT "./"
-#define PATTERN_LOCATION "./patterns"
+#define PATTERN_LOCATION "patterns/"
 #define LOG_FILE "err.log"
 
 
@@ -22,7 +22,9 @@
 
 static void file_iterate(char name[128], DIR *dir, struct dirent *ent, int offset, const int max_cols);
 void fileBrowse(char buf[128]);
-static int handleFuckingButtons(int ch);
+static int handleFuckingButtons();
+
+void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, int mode);
 
 void mainMenu();
 void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16], Sample *bank[16], int bank_name);

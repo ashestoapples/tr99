@@ -234,7 +234,7 @@ int bankSelection(FILE *log, Sample *bank[16], int bankNumber)
 	printw("Select bank: (1-16): ");
 	int ch = -1;
 	while (ch < 0 || ch > 15)
-		ch = handleFuckingButtons(0);
+		ch = handleFuckingButtons();
 	ch++;
 	bankNumber = ch;
 	char bank_path[32], full_path[512] ;
@@ -346,7 +346,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 			}			
 		}
 
-		ch = handleFuckingButtons(ch);
+		ch = handleFuckingButtons();
 		//printw("Handled buttons, ch = %d\n", ch);//getch();
 		bool skip = true;
 		if (ch == CHANGEMODE)
@@ -389,7 +389,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 				else
 					printw("empty\n");
 			}
-			ch = handleFuckingButtons(ch);
+			ch = handleFuckingButtons();
 			if (ch > 15 || bank[ch] == NULL)
 			{
 				if (ch != CHANGEMODE)
@@ -405,6 +405,16 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 				chan = ch;
 			}
 		}
+		else if (ch == EXPORT)
+		{
+			exportImportPattern(log, mix, bank, ch, 0);
+			ch = 0;
+		}
+		else if (ch == IMPORT)
+		{
+			exportImportPattern(log, mix, bank, ch, 1);
+			ch = 0;
+		}
 		else
 		{
 			if (mode == SELECT && ch >= 0 && ch < 16)
@@ -413,7 +423,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 			{
 				if (mix[chan]->pattern[ch] == NULL)
 				{
-					mix[chan]->pattern[ch] = initStep(128);
+					mix[chan]->pattern[ch] = initStep(64);
 				}
 				else
 				{
@@ -441,10 +451,10 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 	}
 }
 
-static int handleFuckingButtons(int ch)
+static int handleFuckingButtons()
 {
-	int select;
-	ch = getch();
+	int select,
+		ch = getch();
 	switch(ch)
 	{
 		case B1:
@@ -499,6 +509,130 @@ static int handleFuckingButtons(int ch)
 			return ch;
 	}
 	return select;
+}
+
+void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, int mode)
+{
+	char *mdisplay;
+	if (mode == 0)
+		mdisplay = "export";
+	else
+		mdisplay = "import";
+	clear();
+	refresh();
+	DIR *dir;
+	struct dirent *ent;
+	int blocks[16];
+	for (int i = 0; i < 16; i++)
+		blocks[i] = 0;
+	if ((dir = opendir(PATTERN_LOCATION)) != NULL)
+	{
+		while ((ent = readdir(dir)) != NULL)
+		{
+			if (ent->d_name[0] > 48 && ent->d_name[0] < 58)
+			{
+				if (ent->d_name[0] == 49)
+				{
+					if (ent->d_name[1] != '.')
+					{
+						blocks[10 + (int)(ent->d_name[1]) - 49] = 1;
+					}
+					else
+						blocks[10] = 1;
+				}
+				else
+					blocks[(int)(ent->d_name[0]) - 49] = 1;
+			}
+		}
+	}
+	else
+	{
+		fprintf(log, "[%s] UNABLE TO READ PATTERN DIRECTORY", timeStamp());
+		return;
+	}
+	printw("Choose slot to %s patern (1 - 16), CHANGMODE to cancel\n", mdisplay);
+	for (int i = 0; i < 16; i++)
+	{
+		if (blocks[i] == 1)
+			printw("[%d] - OCCUPIED\n", i+1);
+		else
+			printw("[%d] - EMPTY\n", i+1);
+	}
+	ch = 99999;
+	while (ch > 15)
+	{
+		ch = handleFuckingButtons();
+		if (ch == CHANGEMODE)
+		{
+			return;
+		}
+	}
+	
+	char fn[24];
+	sprintf(fn, "./patterns/%d.track\0", ch + 1);
+	fprintf(log, "[%s] opened %s for writing", timeStamp(), fn);
+
+	FILE *fp;
+	if (mode == 0)
+	{
+		fp = fopen(fn, "w");
+		char line[1028],
+			 chunk[16];
+
+		for (int i = 0; i < 16; i++)
+		{
+			if (mix[i] == NULL || mix[i]->pattern == NULL)
+			{
+				if (bank[i] != NULL)
+				{
+					sprintf(line, "C%d: B%d, ()()()()()()()()()()()()()()()();\n", i, i);
+					fprintf(fp, line);
+				}
+			}
+			else
+			{
+				sprintf(line, "C%d: B%d, ", i, i);
+				for (int j = 0; j < 16; j++)
+				{
+					if (mix[i]->pattern[j] == NULL)
+						strcat(line, "()");
+					else
+					{
+						sprintf(chunk, "(%d)", (int)mix[i]->pattern[j]->vol);
+						strcat(line, chunk);
+						memset(chunk, '\0', 16);
+					}
+				}
+				strcat(line, ";\n\0");
+				fprintf(fp, line);
+			}
+			memset(line, '\0', 1028);
+		}
+		fclose(fp);
+	}
+	else
+	{
+		if (blocks[ch] == 0)
+		{
+			printw("Cannot import empty pattern\n");
+			sleep(2);
+			return;
+		}
+		//printw("Before Destruction\n");
+		//getch();
+		for (int i = 0; i < 16; i++)
+		{
+			if (mix[i] != NULL)
+			{
+				for (int j = 0; j < 16; j++)
+					destroyStep(mix[i]->pattern[j]);
+				mix[i] = NULL;
+			}
+		}
+		printw("Before import\n");
+		getch();
+		importSequence(fn, mix, bank);
+	}
 }
 
 void playingDisplay(FILE *log,float tempo, int ch, Channel *mix[16])
