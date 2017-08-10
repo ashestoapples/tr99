@@ -293,6 +293,8 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 	enum modes {SELECT, COMPOSE, EDIT};
 	enum modes mode = SELECT;
 
+	Step *clipBoard = NULL;
+
 	while (ch != 113)
 	{
 		bool empty = false;
@@ -326,7 +328,11 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 			{
 				printw("Sample:\t%s\n", mix[chan]->sound->fname);
 				printw("Velocity:\t%f\n", mix[chan]->pattern[select]->vol);
-				printw("Hold:\t%%100\n");
+				if (mix[chan]->pattern[select]->trim >= 500)
+					printw("trim:\t\t%%100\n");
+				else
+					printw("trim:\t\t%d ms\n", mix[chan]->pattern[select]->trim);
+				printw("Delay:\t\t 0 ms\n");
 				printw("Pitch:\t~0\n");
 				printw("Treble:\t1\t\n");
 				printw("Mid:\t1\n");
@@ -351,6 +357,8 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 		bool skip = true;
 		if (ch == CHANGEMODE)
 		{
+			destroyStep(clipBoard);
+			clipBoard = NULL;
 			switch (mode)
 			{
 				case COMPOSE:
@@ -372,7 +380,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 		}
 		else if (ch == PLAY)
 		{
-			playingDisplay(log, tempo, ch, mix);
+			tempo = playingDisplay(log, tempo, ch, mix);
 		}
 		else if (ch == NO)
 			return;
@@ -423,7 +431,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 			{
 				if (mix[chan]->pattern[ch] == NULL)
 				{
-					mix[chan]->pattern[ch] = initStep(64);
+					mix[chan]->pattern[ch] = initStep(64, 500);
 				}
 				else
 				{
@@ -443,6 +451,28 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 							mix[chan]->pattern[select]->vol+=4;
 						else if (ch == KEY_DOWN && mix[chan]->pattern[select]->vol > 4)
 							mix[chan]->pattern[select]->vol-=4;
+						else if (ch == KEY_LEFT && mix[chan]->pattern[select]->trim > 25)
+							mix[chan]->pattern[select]->trim-=10;
+						else if (ch == KEY_RIGHT && mix[chan]->pattern[select]->trim < 500)
+							mix[chan]->pattern[select]->trim+=10;
+						else if (ch == 99)
+						{
+							clipBoard = initStep(mix[chan]->pattern[select]->vol,
+												 mix[chan]->pattern[select]->trim);
+						}
+						else if (ch == 112 && clipBoard != NULL)
+						{
+							destroyStep(mix[chan]->pattern[select]);
+							mix[chan]->pattern[select] = initStep(clipBoard->vol, clipBoard->trim);
+						}
+
+					}
+					else
+					{
+						if (ch == 112 && clipBoard != NULL)
+						{
+							mix[chan]->pattern[select] = initStep(clipBoard->vol, clipBoard->trim);
+						}
 					}
 				}
 			}
@@ -538,7 +568,9 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 						blocks[10 + (int)(ent->d_name[1]) - 49] = 1;
 					}
 					else
-						blocks[10] = 1;
+					{
+						blocks[0] = 1;
+					}
 				}
 				else
 					blocks[(int)(ent->d_name[0]) - 49] = 1;
@@ -598,7 +630,7 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 						strcat(line, "()");
 					else
 					{
-						sprintf(chunk, "(%d)", (int)mix[i]->pattern[j]->vol);
+						sprintf(chunk, "(%d,%d)", (int)mix[i]->pattern[j]->vol, (int)mix[i]->pattern[j]->trim);
 						strcat(line, chunk);
 						memset(chunk, '\0', 16);
 					}
@@ -635,7 +667,7 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 	}
 }
 
-void playingDisplay(FILE *log,float tempo, int ch, Channel *mix[16])
+int playingDisplay(FILE *log,float tempo, int ch, Channel *mix[16])
 {
 	//playSample(mix[0]->sound, 0);
 	nodelay(stdscr, TRUE);
@@ -670,7 +702,7 @@ void playingDisplay(FILE *log,float tempo, int ch, Channel *mix[16])
 			clear();
 			refresh();
 			prev = pa.i;
-			printw("Tempo: %d\n", (int)(pa.tempo/4));
+			printw("Tempo: %d\n", (int)(tempo));
 			for (int j = 0; j < 16; j++)
 			{
 				if ((j) % 4 == 0 && j != 15 || j == 0)
@@ -692,18 +724,17 @@ void playingDisplay(FILE *log,float tempo, int ch, Channel *mix[16])
 		{
 			case KEY_UP:
 				pa.tempo+=4;
-				tempo++;
 				break;
 			case KEY_DOWN:
 				pa.tempo-=4;
-				tempo--;
 				break;
 		}
+		tempo = (int)pa.tempo / 4;
 		//pa.steps = (60/(tempo) * 1000000) / 4;
 	}
 	usleep(steps);
 	//destroy_p_args(pa);
 	nodelay(stdscr, FALSE);
 
-	return;
+	return tempo;
 }

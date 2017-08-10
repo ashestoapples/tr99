@@ -48,10 +48,11 @@ void destroySample(Sample *ptr)
 }
 
 /* reserve memory for Step struct */
-Step * initStep(int vol)
+Step * initStep(int vol, int trim)
 {
 	Step *ptr = (Step*)malloc(sizeof(Step));
 	ptr->vol = vol;
+	ptr->trim = trim;
 	return ptr;
 }
 
@@ -141,7 +142,7 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 	fread(str,fsize, 1, fp);
 	fclose(fp);
 	
-	if (debug) printw("Alloced str mem, fsize = %d\n", fsize);
+	printw("Alloced str mem, fsize = %d\n", fsize);getch();
 
 	int i, 					//for indexing buffer
 		j, 					//for indexing file
@@ -149,12 +150,13 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 		bank_index, 		//which sample from the sound bank do we want
 		group_attrib = 0, 	//for detection which step attrib we're one
 		seq_step = 0;		//which step in the channel are we on
-	char buf_vol[16];
+	char buf_vol[16], buf_trim[16];
 	bool new_line = true,
 		 f_bank	  = false,
 		 f_group  = false;
 
 	memset(buf_vol, '\0', 16);
+	memset(buf_trim, '\0', 16);
 	for (j = 0; j < fsize; j++)
 	{	
 		//printw("%c", str[j]);getch();
@@ -211,9 +213,10 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 				f_group = false;
 				group_attrib = 0;
 				printw("Assigning volume value: %f\nSeq_step = %d", atof(buf_vol), seq_step);getch();
-				mix[chan]->pattern[seq_step++] = initStep(atoi(buf_vol));
+				mix[chan]->pattern[seq_step++] = initStep(atoi(buf_vol), atoi(buf_trim));
 				//printw("Done\n");
 				memset(buf_vol, '\0', 16);
+				memset(buf_trim, '\0', 16);
 				i = 0;
 			}
 			else
@@ -223,6 +226,8 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 					case 0:
 						buf_vol[i++] = str[j];
 						break;
+					case 1:
+						buf_trim[i++] = str[j];
 				}
 			}
 		}
@@ -283,32 +288,16 @@ static inline struct timeval u_to_tv(int64_t x)
 	return s;
 }
 
-void draw(int dir, int64_t period, int64_t cur, int64_t next)
-{
-	int len = 40 * (next - cur) / period;
-	int s, i;
- 
-	if (len > 20) len = 40 - len;
-	s = 20 + (dir ? len : -len);
- 
-	printf("\033[H");
-	for (i = 0; i <= 40; i++) putchar(i == 20 ? '|': i == s ? '#' : '-');
-}
-
 /* play a single sample */	
-void playSample(Sample *s, float *vol)
+void playSample(Sample *s)
 {
 	if (Mix_PlayChannel(-1, s->chunk, 0) == -1)
 	{
-		printw("SDL+ERROR: %s", Mix_GetError());
+		printw("SDL_ERROR: %s", Mix_GetError());
 		getch();
 		endwin();
 		exit(1);
 	}
-	printw("Playing sound... ");
-	sleep(3);
-	endwin();
-	exit(0);
 }
 
 /* threaded function for playing a pattern */
@@ -348,6 +337,8 @@ void *playSequence(void *args)
 					endwin();
 					exit(1);
 				}
+				if (pa->mix[i]->pattern[pa->i]->trim < 500)
+					Mix_FadeOutChannel(i, pa->mix[i]->pattern[pa->i]->trim);
 			}
 		}
 

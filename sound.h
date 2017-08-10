@@ -23,6 +23,7 @@ typedef struct sample
 typedef struct step
 {
 	float vol;
+	int trim;
 } Step;
 
 typedef struct channel
@@ -51,7 +52,7 @@ void loadSampleBank(char *fn, Sample *bank[16]);
 void destroySample(Sample *ptr);
 
 /* reserve memory for Step struct */
-Step * initStep(int vol);
+Step * initStep(int vol, int trim);
 
 /* free memory from Step struct */
 void destroyStep(Step *ptr);
@@ -70,7 +71,7 @@ char * gen_command(Step *st);
 void *playSequence(void *args);
 
 /* play a single sample */
-void playSample(Sample *s, float *vol);
+void playSample(Sample *s);
 
 int validateSampleBank(Sample *bank[16]);
 

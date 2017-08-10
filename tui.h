@@ -28,7 +28,7 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 
 void mainMenu();
 void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16], Sample *bank[16], int bank_name);
-void playingDisplay(FILE *log, float tempo, int ch, Channel *mix[16]);
+int playingDisplay(FILE *log, float tempo, int ch, Channel *mix[16]);
 int bankSelection(FILE *log, Sample *bank[16], int bankNumber);
 
 char * timeStamp();
