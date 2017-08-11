@@ -48,11 +48,12 @@ void destroySample(Sample *ptr)
 }
 
 /* reserve memory for Step struct */
-Step * initStep(int vol, int trim)
+Step * initStep(int vol, int trim, int delay)
 {
 	Step *ptr = (Step*)malloc(sizeof(Step));
 	ptr->vol = vol;
 	ptr->trim = trim;
+	ptr->delay = delay;
 	return ptr;
 }
 
@@ -150,13 +151,14 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 		bank_index, 		//which sample from the sound bank do we want
 		group_attrib = 0, 	//for detection which step attrib we're one
 		seq_step = 0;		//which step in the channel are we on
-	char buf_vol[16], buf_trim[16];
+	char buf_vol[16], buf_trim[16], buf_del[16];
 	bool new_line = true,
 		 f_bank	  = false,
 		 f_group  = false;
 
 	memset(buf_vol, '\0', 16);
 	memset(buf_trim, '\0', 16);
+	memset(buf_del, '\0', 16);
 	for (j = 0; j < fsize; j++)
 	{	
 		//printw("%c", str[j]);getch();
@@ -213,10 +215,11 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 				f_group = false;
 				group_attrib = 0;
 				printw("Assigning volume value: %f\nSeq_step = %d", atof(buf_vol), seq_step);getch();
-				mix[chan]->pattern[seq_step++] = initStep(atoi(buf_vol), atoi(buf_trim));
+				mix[chan]->pattern[seq_step++] = initStep(atoi(buf_vol), atoi(buf_trim), atoi(buf_del));
 				//printw("Done\n");
 				memset(buf_vol, '\0', 16);
 				memset(buf_trim, '\0', 16);
+				memset(buf_del, '\0', 16);
 				i = 0;
 			}
 			else
@@ -228,6 +231,8 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 						break;
 					case 1:
 						buf_trim[i++] = str[j];
+					case 2:
+						buf_del[i++] = str[j];
 				}
 			}
 		}
@@ -330,12 +335,25 @@ void *playSequence(void *args)
 			if (pa->mix[i] != NULL && pa->mix[i]->pattern != NULL && pa->mix[i]->pattern[pa->i] != NULL)
 			{
 				Mix_Volume(i, pa->mix[i]->pattern[pa->i]->vol);
-				if (Mix_PlayChannel(i, pa->mix[i]->sound->chunk, 0) == -1)
+				if (pa->mix[i]->pattern[pa->i]->delay > 0)
 				{
-					printw("SDL+ERROR: %s", Mix_GetError());
-					getch();
-					endwin();
-					exit(1);
+					if (Mix_FadeInChannel(i, pa->mix[i]->sound->chunk, 0, pa->mix[i]->pattern[pa->i]->delay) == -1)
+					{
+						printw("SDL+ERROR: %s", Mix_GetError());
+						getch();
+						endwin();
+						exit(1);
+					}
+				}
+				else
+				{
+					if (Mix_PlayChannel(i, pa->mix[i]->sound->chunk, 0) == -1)
+					{
+						printw("SDL+ERROR: %s", Mix_GetError());
+						getch();
+						endwin();
+						exit(1);
+					}
 				}
 				if (pa->mix[i]->pattern[pa->i]->trim < 500)
 					Mix_FadeOutChannel(i, pa->mix[i]->pattern[pa->i]->trim);

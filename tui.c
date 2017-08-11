@@ -332,7 +332,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 					printw("trim:\t\t%%100\n");
 				else
 					printw("trim:\t\t%d ms\n", mix[chan]->pattern[select]->trim);
-				printw("Delay:\t\t 0 ms\n");
+				printw("Delay:\t\t %d ms\n", mix[chan]->pattern[select]->delay);
 				printw("Pitch:\t~0\n");
 				printw("Treble:\t1\t\n");
 				printw("Mid:\t1\n");
@@ -420,6 +420,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 		}
 		else if (ch == IMPORT)
 		{
+			printw("Importing\n"); getch();
 			exportImportPattern(log, mix, bank, ch, 1);
 			ch = 0;
 		}
@@ -431,7 +432,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 			{
 				if (mix[chan]->pattern[ch] == NULL)
 				{
-					mix[chan]->pattern[ch] = initStep(64, 500);
+					mix[chan]->pattern[ch] = initStep(64, 500, 0);
 				}
 				else
 				{
@@ -455,15 +456,20 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 							mix[chan]->pattern[select]->trim-=10;
 						else if (ch == KEY_RIGHT && mix[chan]->pattern[select]->trim < 500)
 							mix[chan]->pattern[select]->trim+=10;
+						else if (ch == DEL_UP && mix[chan]->pattern[select]->delay < 250)
+							mix[chan]->pattern[select]->delay+=10;
+						else if (ch == DEL_DN && mix[chan]->pattern[select]->delay > 0)
+							mix[chan]->pattern[select]->delay-=10;
 						else if (ch == 99)
 						{
 							clipBoard = initStep(mix[chan]->pattern[select]->vol,
-												 mix[chan]->pattern[select]->trim);
+												 mix[chan]->pattern[select]->trim,
+												 mix[chan]->pattern[select]->delay);
 						}
 						else if (ch == 112 && clipBoard != NULL)
 						{
 							destroyStep(mix[chan]->pattern[select]);
-							mix[chan]->pattern[select] = initStep(clipBoard->vol, clipBoard->trim);
+							mix[chan]->pattern[select] = initStep(clipBoard->vol, clipBoard->trim, clipBoard->delay);
 						}
 
 					}
@@ -471,7 +477,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 					{
 						if (ch == 112 && clipBoard != NULL)
 						{
-							mix[chan]->pattern[select] = initStep(clipBoard->vol, clipBoard->trim);
+							mix[chan]->pattern[select] = initStep(clipBoard->vol, clipBoard->trim, clipBoard->delay);
 						}
 					}
 				}
@@ -630,7 +636,7 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 						strcat(line, "()");
 					else
 					{
-						sprintf(chunk, "(%d,%d)", (int)mix[i]->pattern[j]->vol, (int)mix[i]->pattern[j]->trim);
+						sprintf(chunk, "(%d,%d,%d)", (int)mix[i]->pattern[j]->vol, (int)mix[i]->pattern[j]->trim, (int)mix[i]->pattern[j]->delay);
 						strcat(line, chunk);
 						memset(chunk, '\0', 16);
 					}
