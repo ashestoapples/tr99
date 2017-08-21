@@ -27,10 +27,14 @@
 #define COPY	99	//c
 #define PASTE	118	//v
 #define YES		10	//enter
-#define NO		127	//backspace
+#define NO		27	//backspace
 #define DELETE	27	//esc
 #define DEMOPLAY 9	//tab
 #define CHANGEMODE 92 //backslash
+#define EXPORT	69 //E
+#define IMPORT	73 //I
+#define DEL_UP	61 //=
+#define DEL_DN	45 //-
 #endif
 
 #endif
