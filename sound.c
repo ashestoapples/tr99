@@ -20,6 +20,7 @@
 
 bool debug = true;
 
+/* global timevals */
 struct timeval start, last;
 
 /* reserve memory for sample */
@@ -66,6 +67,7 @@ void destroyStep(Step *ptr)
 	ptr = NULL;
 }
 
+/* reserve memory single channel */
 Channel * initChannel(Sample *bank[16], int bank_index)
 {
 	Channel *ptr;
@@ -78,6 +80,7 @@ Channel * initChannel(Sample *bank[16], int bank_index)
 	return ptr;
 }
 
+/* free memory for single channel */
 void DestroyChannel(Channel *ptr)
 {
 	for (int i = 0; i < 16; i++)
@@ -100,6 +103,7 @@ void DestroyChannel(Channel *ptr)
 // 	}
 // }
 
+/* read a sample .bank file and load wavs into memory*/
 void loadSampleBank(char *fn, Sample *bank[16])
 {
 	FILE *fp = fopen(fn, "rb");
@@ -134,7 +138,8 @@ void loadSampleBank(char *fn, Sample *bank[16])
 /* create 16 step seq from .track file, refer to REAMME for track file syntax */
 void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 {
-	printw("Openeing: %s\n", fn);getch();
+	/* find size of the file */
+	//printw("Openeing: %s\n", fn);getch();
 	FILE *fp = fopen(fn, "rb");
 	fseek(fp, 0, SEEK_END);
 	long fsize = ftell(fp);
@@ -143,7 +148,7 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 	fread(str,fsize, 1, fp);
 	fclose(fp);
 	
-	printw("Alloced str mem, fsize = %d\n", fsize);getch();
+	//printw("Alloced str mem, fsize = %d\n", fsize);getch();
 
 	int i, 					//for indexing buffer
 		j, 					//for indexing file
@@ -151,7 +156,7 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 		bank_index, 		//which sample from the sound bank do we want
 		group_attrib = 0, 	//for detection which step attrib we're one
 		seq_step = 0;		//which step in the channel are we on
-	char buf_vol[16], buf_trim[16], buf_del[16];
+	char buf_vol[16], buf_trim[16], buf_del[16]; //char buffer sfor step attributes
 	bool new_line = true,
 		 f_bank	  = false,
 		 f_group  = false;
@@ -197,7 +202,7 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 			if (str[j + 1] == ')')
 			{
 				mix[chan]->pattern[seq_step++] = NULL;
-				printw("Found empty step\n");
+				//printw("Found empty step\n");
 				//j+=2;
 			}
 			else
@@ -214,7 +219,7 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 			{
 				f_group = false;
 				group_attrib = 0;
-				printw("Assigning volume value: %f\nSeq_step = %d", atof(buf_vol), seq_step);getch();
+				//printw("Assigning volume value: %f\nSeq_step = %d", atof(buf_vol), seq_step);getch();
 				mix[chan]->pattern[seq_step++] = initStep(atoi(buf_vol), atoi(buf_trim), atoi(buf_del));
 				//printw("Done\n");
 				memset(buf_vol, '\0', 16);
@@ -268,6 +273,7 @@ int validateSampleBank(Sample *bank[16])
 	return -1;
 }
 
+/* open audio device, allocate mixing channels */
 int initSDL()
 {
 	if (SDL_Init(SDL_INIT_AUDIO) < 0)
@@ -280,11 +286,13 @@ int initSDL()
 	return 0;
 }
 
+/* helper function for software metronome */
 static inline int64_t tv_to_u(struct timeval s)
 {
 	return s.tv_sec * 1000000 + s.tv_usec;
 }
- 
+
+/* helper function for software metronome */ 
 static inline struct timeval u_to_tv(int64_t x)
 {
 	struct timeval s;

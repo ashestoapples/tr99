@@ -23,7 +23,7 @@ typedef struct sample
 typedef struct step
 {
 	float vol;
-	int trim;
+	int trim, delay;
 } Step;
 
 typedef struct channel
@@ -52,7 +52,7 @@ void loadSampleBank(char *fn, Sample *bank[16]);
 void destroySample(Sample *ptr);
 
 /* reserve memory for Step struct */
-Step * initStep(int vol, int trim);
+Step * initStep(int vol, int trim, int delay);
 
 /* free memory from Step struct */
 void destroyStep(Step *ptr);

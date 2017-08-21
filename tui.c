@@ -14,7 +14,8 @@
 
 static bool debug = true;
 
-//prototype 
+//this whole thing is fucking spagetti
+
 /* visual file browser fn */ 
 void fileBrowse(char buf[128])
 {
@@ -115,6 +116,7 @@ static void file_iterate(char name[512], DIR *dir, struct dirent *ent, int offse
 	}
 }
 
+/* create a timestamp for error log writting */
 char * timeStamp()
 {
 	time_t cur = time(NULL);
@@ -134,6 +136,7 @@ char * timeStamp()
 	return str_time;
 }
 
+/* initial menu, */
 void mainMenu(FILE *log)
 {
 	initscr();
@@ -218,6 +221,7 @@ void mainMenu(FILE *log)
 
 }
 
+/* display for selecting a sample bank */
 int bankSelection(FILE *log, Sample *bank[16], int bankNumber)
 {
 	if (bankNumber != -1)
@@ -266,10 +270,20 @@ int bankSelection(FILE *log, Sample *bank[16], int bankNumber)
 	return ch;
 }
 
+/* menu for editing samples */
 void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16], Sample *bank[16], int bank_name)
 {
+	/* @param log - *FILE error log object
+		@param tempo - bpm tempo
+		@param ch - input character 
+		@param d_iter - itereate used to keep track of position in menu 
+		@param mix - pointer array to 16 mixing channels 
+		@param bank - pointer array to each sample in a bank
+		@param bank_name - int number of bank*/
 	clear();
 	refresh();
+
+	/* initialize mixer channels*/
 	for (int i = 0; i < 16; i++)
 	{
 		if (bank[i] != NULL)
@@ -277,29 +291,21 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 		else
 			mix[i] = NULL;
 	}
-	//Channel *mix[16];
-	//Sample *bank[16];
-	// for (int i = 0; i < 16; i++)
-	// 	mix[i] = NULL;
-	// loadSampleBank("1.bank", bank);
-	// for (int i = 0; i < 3; i++)
-	// 	printw("Bank sound %d: %s\n", i, bank[i]->fname);
-	// importSequence("2.track", mix, bank);
-	//char *bank_name = "1.bank";
-	
+
 	d_iter = 0, ch = 0;
 	int select = 0, chan = 0, bank_selected = 0, sound = 0;
 
 	enum modes {SELECT, COMPOSE, EDIT};
 	enum modes mode = SELECT;
 
-	Step *clipBoard = NULL;
+	Step *clipBoard = NULL; /* Step object acting as clipboard for pattern editing */
 
 	while (ch != 113)
 	{
 		bool empty = false;
 		clear();
 		refresh();
+		/* tempo/pattern output which is always printed */
 		attron(A_UNDERLINE);
 		printw("Tempo: %d bpm | 'p' - play/pause\n\n", (int)tempo);//getch();
 		attroff(A_UNDERLINE);
@@ -313,7 +319,10 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 				printw("[ ]");
 			attroff(A_STANDOUT);
 		}//getch();
+
 		printw("\n\nThe current Sample Bank is: %d\nMode: %d\n", bank_name, mode);
+
+		/* mode dependant display options */
 		if (mode == COMPOSE)
 		{
 			printw("The current selected sample is: %s", mix[chan]->sound->fname);
@@ -321,6 +330,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 		}
 		else if (mode == EDIT)
 		{
+			/* edit induvidual step attribs */
 			printw("Press step to edit..\n");
 			if (mix[chan]->pattern[select] == NULL)
 				printw("This is an empty step!\n");
@@ -341,6 +351,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 		}
 		else if (mode == SELECT)
 		{
+			/* select mixing channel for editing */
 			printw("Select channel to edit\n");
 			for (int i = 0; i < 16; i++)
 			{
@@ -352,12 +363,14 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 			}			
 		}
 
+		/* get user input */
 		ch = handleFuckingButtons();
 		//printw("Handled buttons, ch = %d\n", ch);//getch();
 		bool skip = true;
+		/* switch the mode */
 		if (ch == CHANGEMODE)
 		{
-			destroyStep(clipBoard);
+			destroyStep(clipBoard); //the clipboard is erased when we change modes
 			clipBoard = NULL;
 			switch (mode)
 			{
@@ -386,6 +399,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 			return;
 		if (!skip)
 		{
+			/* extra menu if we are switching into compose mode, ask the user which sample they would like to compose with */
 			clear();
 			refresh();
 			printw("Entering compose mode, select bank patch (1-16)\n");
@@ -426,8 +440,11 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 		}
 		else
 		{
+			/* here is were we handle 16 button specific input for all cases */
+			//selecting channel
 			if (mode == SELECT && ch >= 0 && ch < 16)
 				chan = ch;
+			//adding/removing steps from the pattern
 			else if (mode == COMPOSE && ch >= 0 && ch < 16)
 			{
 				if (mix[chan]->pattern[ch] == NULL)
@@ -440,6 +457,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 					mix[chan]->pattern[ch] = NULL;
 				}
 			}
+			//selecting/editing step attributes
 			else if (mode == EDIT)
 			{
 				if (ch >= 0 && ch < 16)
@@ -486,7 +504,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 		//printw("Channel = %d\n", chan);getch();
 	}
 }
-
+/* handle top row input*/
 static int handleFuckingButtons()
 {
 	int select,
@@ -547,6 +565,7 @@ static int handleFuckingButtons()
 	return select;
 }
 
+/* used to save/load patterns */
 void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, int mode)
 {
 	char *mdisplay;
@@ -558,6 +577,7 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 	refresh();
 	DIR *dir;
 	struct dirent *ent;
+	/* find and display open/full save slots */
 	int blocks[16];
 	for (int i = 0; i < 16; i++)
 		blocks[i] = 0;
@@ -611,6 +631,7 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 	fprintf(log, "[%s] opened %s for writing", timeStamp(), fn);
 
 	FILE *fp;
+	/* write if we're writing */
 	if (mode == 0)
 	{
 		fp = fopen(fn, "w");
@@ -648,7 +669,7 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 		}
 		fclose(fp);
 	}
-	else
+	else /* read is we're reading */
 	{
 		if (blocks[ch] == 0)
 		{
@@ -658,6 +679,7 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 		}
 		//printw("Before Destruction\n");
 		//getch();
+		/* destroy all step objects before importing */
 		for (int i = 0; i < 16; i++)
 		{
 			if (mix[i] != NULL)
@@ -669,10 +691,12 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 		}
 		printw("Before import\n");
 		getch();
+		//the import function is in sound.c for some reason
 		importSequence(fn, mix, bank);
 	}
 }
 
+/* screen displaed while beat is playing */
 int playingDisplay(FILE *log,float tempo, int ch, Channel *mix[16])
 {
 	//playSample(mix[0]->sound, 0);
@@ -686,6 +710,10 @@ int playingDisplay(FILE *log,float tempo, int ch, Channel *mix[16])
 	//printf("Before assigning args\n;");
 	struct p_args pa;
 	//pa.seq = seq;
+	/* we created a different thread to act as a metronome ,
+		the p_args object contains pointers which refer our mixer,
+		both threads read from the same struct in memory, however only the input_processing thread can write.
+		The metronome thread terminates when the input thread catches the correct key code */
 	for (int j = 0; j < 16; j++)
 	{
 		pa.mix[j] = mix[j];
