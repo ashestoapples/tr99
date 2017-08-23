@@ -16,6 +16,8 @@ static bool debug = true;
 
 //this whole thing is fucking spagetti
 
+char *pattern_bank_path = "patterns/1/";
+
 /* visual file browser fn */ 
 void fileBrowse(char buf[128])
 {
@@ -25,9 +27,9 @@ void fileBrowse(char buf[128])
 	int x, y, offset = 0;	//screen attribs
 	DIR *dir;
 	struct dirent *ent;
-	strcpy(buf, PATCH_ROOT);
+	strcpy(buf, PATCHES_SEARCH);
 	getmaxyx(stdscr, y, x);
-	strcpy(buf, PATCH_ROOT);
+	strcpy(buf, PATCHES_SEARCH);
 	file_iterate(buf, dir, ent, offset, y-2);
 }
 
@@ -109,7 +111,7 @@ static void file_iterate(char name[512], DIR *dir, struct dirent *ent, int offse
 			while (c != '\0')
 				c = name[i++];
 			name[i-2] = '\0';
-			printf("%s\n", name);
+			printf("Selected: %s\n", name);
 			//getch();
 			return;
 		}
@@ -178,10 +180,16 @@ void mainMenu(FILE *log)
 		printw("\tLoad Sound Bank\n");
 		attroff(A_STANDOUT);
 		if (d_iter == 2) attron(A_STANDOUT);
-		printw("\tLoad Pattern Bank\n");
+		printw("\tEdit Current Sound Bank\n");
 		attroff(A_STANDOUT);
 		if (d_iter == 3) attron(A_STANDOUT);
+		printw("\tLoad Pattern Bank\n");
+		attroff(A_STANDOUT);
+		if (d_iter == 4) attron(A_STANDOUT);
 		printw("\tGlobal Settings\n");
+		attroff(A_STANDOUT);
+		if (d_iter == 5) attron(A_STANDOUT);
+		printw("\tManage Saved Patterns\n");
 		attroff(A_STANDOUT);
 		ch = getch();
 		switch (ch)
@@ -190,7 +198,7 @@ void mainMenu(FILE *log)
 				d_iter = (d_iter > 0) ? d_iter-1 : d_iter;
 				break;
 			case KEY_DOWN:
-				d_iter = (d_iter < 3) ? d_iter+1 : d_iter;
+				d_iter = (d_iter < 4) ? d_iter+1 : d_iter;
 				break;
 			case YES:
 				switch (d_iter)
@@ -207,6 +215,15 @@ void mainMenu(FILE *log)
 						bank_name = bankSelection(log, bank, bank_name);
 						break;
 					case 2:
+						if (bank_name != -1)
+						{
+							bankEditor(log, bank, bank_name);
+						}
+						else 
+							bank_name = -1;
+						break;
+					case 3:
+						patternBankSelection(log);
 						break;
 
 				}
@@ -242,32 +259,94 @@ int bankSelection(FILE *log, Sample *bank[16], int bankNumber)
 	ch++;
 	bankNumber = ch;
 	char bank_path[32], full_path[512] ;
-	sprintf(bank_path, "banks/%d/", ch);
-	DIR *dir;
-	int i = 0;
-	struct dirent *ent;
-	if ((dir = opendir(bank_path)) != NULL)
+	sprintf(bank_path, "banks/%d.bank", ch);
+	if ( access( bank_path, F_OK ) == -1)
 	{
-		while ((ent = readdir(dir)) != NULL)
-		{
-			if (strcmp(ent->d_name, "..") != 0 && strcmp(ent->d_name, ".") != 0)
-			{
-				sprintf(full_path, "%s%s\0", bank_path, ent->d_name);
-				bank[i++] = initSample(full_path);
-				if (bank[i-1] == NULL)
-				{
-					fprintf(log, "%s\nFAILED to load smaple into memory: %s\nReason: %s", timeStamp(), full_path, Mix_GetError());
-				}
-				memset(full_path, '\0', 128);
-				if (i > 15)
-					break;
-			}
-		}
+		FILE *fp = fopen(bank_path, "w");
+		fclose(fp);
 	}
-	for (; i < 16; i++)
-		bank[i] = NULL;
+	loadSampleBank(bank_path, bank);
 	//getch();
 	return ch;
+}
+
+void bankEditor(FILE *log, Sample *bank[16], int bankNumber)
+{
+	clear();
+	refresh();
+	int ch = 0;
+	while (ch != NO)
+	{
+		for (int i = 0; i < 16; i++)
+		{
+			if (bank[i] != NULL)
+				printw(" %d - [%s]\n", i, bank[i]->fname);
+				else
+				printw("%d - [ EMPTY ]\n", i);
+		}
+		ch = handleFuckingButtons();
+		if (ch < 16)
+		{
+			int snd = ch;
+			clear();
+			refresh();
+			printw("\t Delete or Replace ? (esc/enter)\nAnyother key to return\n");
+			ch = getch();
+			if (ch == DELETE)
+			{
+				destroySample(bank[snd]);
+				char *fn =  malloc(sizeof(char)*32);
+				sprintf(fn, "%s%d.bank", PATCH_ROOT, bankNumber);
+				updateSampleBank(fn, bank);
+				free(fn);
+			}
+			else if (ch == YES)
+			{
+				char p[128];
+				printw("Entering file browser\n");getch();
+				fileBrowse(p);
+				destroySample(bank[snd]);
+				bank[snd] = initSample(p);
+				clear(); refresh();
+				printw("Making some room\n");getch();
+				char *fn =  malloc(sizeof(char)*32);
+				printw(" Updating sample bank\n"); getch();
+				sprintf(fn, "%s%d.bank", PATCH_ROOT, bankNumber);
+				updateSampleBank(fn, bank);
+				free(fn);
+			}
+			ch = 0;
+		}	
+	}
+}
+
+void patternBankSelection(FILE *log)
+{
+	clear();
+	refresh();
+	int ch = 99;
+	DIR *dir;
+	struct dirent *ent;
+	if ((dir = opendir(pattern_bank_path)) != NULL)
+	{
+		;
+	}
+	else
+	{
+		fprintf(log, "[%s] UNABLE TO READ PATTERN DIRECTORY", timeStamp());
+		return;
+	}
+	while ((ch = handleFuckingButtons()+1) > 16 && ch > 0)
+	{
+		printw("Using pattern bank: %s", pattern_bank_path);
+		for (int i = 0 ; i < 16; i ++)
+		{
+			printw(" [%d] \n", i+1);
+		}
+	}
+	pattern_bank_path = malloc(sizeof(sizeof(char)*24));
+	fprintf(log, "[%s] patern dir is now: %s\n", timeStamp(), pattern_bank_path);
+	sprintf(pattern_bank_path, "patterns/%d/", ch);
 }
 
 /* menu for editing samples */
@@ -343,6 +422,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 				else
 					printw("trim:\t\t%d ms\n", mix[chan]->pattern[select]->trim);
 				printw("Delay:\t\t %d ms\n", mix[chan]->pattern[select]->delay);
+				printw("Probability\t %s\n", mix[chan]->pattern[select]->prob);
 				printw("Pitch:\t~0\n");
 				printw("Treble:\t1\t\n");
 				printw("Mid:\t1\n");
@@ -449,7 +529,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 			{
 				if (mix[chan]->pattern[ch] == NULL)
 				{
-					mix[chan]->pattern[ch] = initStep(64, 500, 0);
+					mix[chan]->pattern[ch] = initStep(64, 500, 0, "%100");
 				}
 				else
 				{
@@ -478,16 +558,77 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 							mix[chan]->pattern[select]->delay+=10;
 						else if (ch == DEL_DN && mix[chan]->pattern[select]->delay > 0)
 							mix[chan]->pattern[select]->delay-=10;
+						else if (ch == PROB_U && strcmp(mix[chan]->pattern[select]->prob, "%100") != 0)
+						{
+							if (mix[chan]->pattern[select]->prob[0] == '%')
+							{
+								if (mix[chan]->pattern[select]->prob[1] == '9')
+									strcpy(mix[chan]->pattern[select]->prob, "1/16");
+								else
+								{
+									mix[chan]->pattern[select]->prob[1] += 1;
+								}
+							}
+							else
+							{
+								if (strcmp(mix[chan]->pattern[select]->prob, "1/2") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "%100");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/3") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/2");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/4") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/3");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/6") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/4");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/8") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/6");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/10") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/8");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/12") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/10");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/16") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/12");
+							}
+						}
+						else if (ch == PROB_D && strcmp(mix[chan]->pattern[select]->prob, "%10") != 0)
+						{
+							if (mix[chan]->pattern[select]->prob[0] == '%')
+							{
+								if (strcmp(mix[chan]->pattern[select]->prob, "%100") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/2");
+								else 
+									mix[chan]->pattern[select]->prob[1] -= 1;
+							}
+							else
+							{
+								if (strcmp(mix[chan]->pattern[select]->prob, "1/2") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/3");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/3") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/4");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/4") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/6");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/6") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/8");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/8") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/10");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/10") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/12");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/12") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/16");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/16") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "%90");
+							}
+						}
 						else if (ch == 99)
 						{
 							clipBoard = initStep(mix[chan]->pattern[select]->vol,
 												 mix[chan]->pattern[select]->trim,
-												 mix[chan]->pattern[select]->delay);
+												 mix[chan]->pattern[select]->delay,
+												 mix[chan]->pattern[select]->prob);
 						}
 						else if (ch == 112 && clipBoard != NULL)
 						{
 							destroyStep(mix[chan]->pattern[select]);
-							mix[chan]->pattern[select] = initStep(clipBoard->vol, clipBoard->trim, clipBoard->delay);
+							mix[chan]->pattern[select] = initStep(clipBoard->vol, clipBoard->trim, clipBoard->delay, clipBoard->prob);
 						}
 
 					}
@@ -495,7 +636,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 					{
 						if (ch == 112 && clipBoard != NULL)
 						{
-							mix[chan]->pattern[select] = initStep(clipBoard->vol, clipBoard->trim, clipBoard->delay);
+							mix[chan]->pattern[select] = initStep(clipBoard->vol, clipBoard->trim, clipBoard->delay, clipBoard->prob);
 						}
 					}
 				}
@@ -581,7 +722,7 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 	int blocks[16];
 	for (int i = 0; i < 16; i++)
 		blocks[i] = 0;
-	if ((dir = opendir(PATTERN_LOCATION)) != NULL)
+	if ((dir = opendir(pattern_bank_path)) != NULL)
 	{
 		while ((ent = readdir(dir)) != NULL)
 		{
@@ -627,7 +768,7 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 	}
 	
 	char fn[24];
-	sprintf(fn, "./patterns/%d.track\0", ch + 1);
+	sprintf(fn, "%s%d.track\0", pattern_bank_path, ch + 1);
 	fprintf(log, "[%s] opened %s for writing", timeStamp(), fn);
 
 	FILE *fp;
@@ -657,7 +798,7 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 						strcat(line, "()");
 					else
 					{
-						sprintf(chunk, "(%d,%d,%d)", (int)mix[i]->pattern[j]->vol, (int)mix[i]->pattern[j]->trim, (int)mix[i]->pattern[j]->delay);
+						sprintf(chunk, "(%d,%d,%d,%s)", (int)mix[i]->pattern[j]->vol, (int)mix[i]->pattern[j]->trim, (int)mix[i]->pattern[j]->delay, mix[i]->pattern[j]->prob);
 						strcat(line, chunk);
 						memset(chunk, '\0', 16);
 					}
