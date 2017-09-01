@@ -473,7 +473,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 		}
 		else if (ch == PLAY)
 		{
-			tempo = playingDisplay(log, tempo, ch, mix);
+			tempo = playingDisplay(log, tempo, ch, mix, bank);
 		}
 		else if (ch == NO)
 			return;
@@ -838,7 +838,7 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 }
 
 /* screen displaed while beat is playing */
-int playingDisplay(FILE *log,float tempo, int ch, Channel *mix[16])
+int playingDisplay(FILE *log,float tempo, int ch, Channel *mix[16], Sample *bank[16])
 {
 	//playSample(mix[0]->sound, 0);
 	nodelay(stdscr, TRUE);
@@ -892,7 +892,7 @@ int playingDisplay(FILE *log,float tempo, int ch, Channel *mix[16])
 		}
 
 		//printf("\n");
-		pa.ch = getch();
+		pa.ch = handleFuckingButtons();
 		//i = (i < 15) ? i+1 : 0;
 		//usleep((int)steps);
 		switch(pa.ch)
@@ -903,6 +903,14 @@ int playingDisplay(FILE *log,float tempo, int ch, Channel *mix[16])
 			case KEY_DOWN:
 				pa.tempo-=4;
 				break;
+		}
+		if (pa.ch >= 0 && pa.ch <= 15)
+		{
+			char fn[16];
+			sprintf(fn, "%s%d.track", pattern_bank_path, pa.ch + 1);
+			importSequence(fn, mix, bank);
+			for (int j = 0; j < 16; j++)
+				pa.mix[j] = mix[j];
 		}
 		tempo = (int)pa.tempo / 4;
 		//pa.steps = (60/(tempo) * 1000000) / 4;

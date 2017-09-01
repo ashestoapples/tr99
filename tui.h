@@ -37,7 +37,7 @@ void mainMenu();
 /* menu for editing patterns*/
 void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16], Sample *bank[16], int bank_name);
 /* displayed when beat is playing */
-int playingDisplay(FILE *log, float tempo, int ch, Channel *mix[16]);
+int playingDisplay(FILE *log, float tempo, int ch, Channel *mix[16], Sample *bank[16]);
 /* menu for selecting sound bank */
 int bankSelection(FILE *log, Sample *bank[16], int bankNumber);
 
