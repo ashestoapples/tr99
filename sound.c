@@ -147,7 +147,7 @@ void loadSampleBank(char *fn, Sample *bank[16])
 void updateSampleBank(char *fn, Sample *bank[16])
 {
 	FILE *fp = fopen(fn, "w");
-	for (int i =- 0; i < 16; i++)
+	for (int i = 0; i < 16; i++)
 	{
 		if (bank[i] != NULL)
 			fprintf(fp ,"%s;", bank[i]->fname);
@@ -161,6 +161,8 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 	/* find size of the file */
 	//printw("Openeing: %s\n", fn);getch();
 	FILE *fp = fopen(fn, "rb");
+	if (fp == NULL)
+		return;
 	fseek(fp, 0, SEEK_END);
 	long fsize = ftell(fp);
 	fseek(fp, 0, SEEK_SET);
@@ -240,7 +242,7 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 			{
 				f_group = false;
 				group_attrib = 0;
-				//printw("Assigning volume value: %f\nSeq_step = %d", atof(buf_vol), seq_step);getch();
+				//printw("Assigning volume value: %f\nSeq_step = %d\nOriginal buffer: %s", atof(buf_vol), seq_step, buf_vol);getch();
 				mix[chan]->pattern[seq_step++] = initStep(atoi(buf_vol), atoi(buf_trim), atoi(buf_del), buf_prob);
 				//printw("Done\n");
 				memset(buf_vol, '\0', 16);
@@ -258,10 +260,13 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 						break;
 					case 1:
 						buf_trim[i++] = str[j];
+						break;
 					case 2:
 						buf_del[i++] = str[j];
+						break;
 					case 3:
 						buf_prob[i++] = str[j];
+						break;
 				}
 			}
 		}
