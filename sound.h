@@ -23,7 +23,8 @@ typedef struct sample
 typedef struct step
 {
 	float vol;
-	int trim;
+	int trim, delay;
+	char prob[4];
 } Step;
 
 typedef struct channel
@@ -52,7 +53,7 @@ void loadSampleBank(char *fn, Sample *bank[16]);
 void destroySample(Sample *ptr);
 
 /* reserve memory for Step struct */
-Step * initStep(int vol, int trim);
+Step * initStep(int vol, int trim, int delay, char *prob);
 
 /* free memory from Step struct */
 void destroyStep(Step *ptr);
@@ -74,6 +75,8 @@ void *playSequence(void *args);
 void playSample(Sample *s);
 
 int validateSampleBank(Sample *bank[16]);
+
+void updateSampleBank(char *fn, Sample *bank[16]);
 
 /* metronome relative functions */
 static inline int64_t tv_to_u(struct timeval s);

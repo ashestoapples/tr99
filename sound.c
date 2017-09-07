@@ -20,21 +20,26 @@
 
 bool debug = true;
 
+/* global timevals */
 struct timeval start, last;
+
 
 /* reserve memory for sample */
 Sample * initSample(char *fn)
 {
-	//if (Mix_OpenAudio(22050, MIX_DEFAULT_FORMAT, 8, 4096) == -1)
-	//	printw("SDL_error: %s\n", Mix_GetError());
+	clear(); refresh();
+	// if (Mix_OpenAudio(22050, MIX_DEFAULT_FORMAT, 8, 4096) == -1)
+	// 	printw("SDL_error: %s\n", Mix_GetError());
 	Sample *ptr = (Sample*)malloc(sizeof(Sample));
 	ptr->fname = (char*)malloc(sizeof(char)*512);
 	strcpy(ptr->fname, fn);
-	//printf("%s\n", ptr->fname);
+	printf("%s\n", ptr->fname); getch();
 	ptr->chunk = Mix_LoadWAV(fn);
 	if (ptr->chunk == NULL)
 	{
+		printw("SDL_error: %s\n", Mix_GetError()); getch();
 		destroySample(ptr);
+		return NULL;
 	}
 	return ptr;
 }
@@ -42,17 +47,21 @@ Sample * initSample(char *fn)
 /* free memory from saple struct */
 void destroySample(Sample *ptr)
 {
+	if (ptr == NULL)
+		return;
 	free(ptr->fname);
 	free(ptr);
 	ptr = NULL;
 }
 
 /* reserve memory for Step struct */
-Step * initStep(int vol, int trim)
+Step * initStep(int vol, int trim, int delay, char *prob)
 {
 	Step *ptr = (Step*)malloc(sizeof(Step));
 	ptr->vol = vol;
 	ptr->trim = trim;
+	ptr->delay = delay;
+	strcpy(ptr->prob, prob);
 	return ptr;
 }
 
@@ -65,6 +74,7 @@ void destroyStep(Step *ptr)
 	ptr = NULL;
 }
 
+/* reserve memory single channel */
 Channel * initChannel(Sample *bank[16], int bank_index)
 {
 	Channel *ptr;
@@ -77,6 +87,7 @@ Channel * initChannel(Sample *bank[16], int bank_index)
 	return ptr;
 }
 
+/* free memory for single channel */
 void DestroyChannel(Channel *ptr)
 {
 	for (int i = 0; i < 16; i++)
@@ -99,6 +110,7 @@ void DestroyChannel(Channel *ptr)
 // 	}
 // }
 
+/* read a sample .bank file and load wavs into memory*/
 void loadSampleBank(char *fn, Sample *bank[16])
 {
 	FILE *fp = fopen(fn, "rb");
@@ -126,15 +138,31 @@ void loadSampleBank(char *fn, Sample *bank[16])
 		}
 
 	}
+	for (; k < 16; k++)
+		bank[k] = NULL;
 
 	free(name_buf);
+}
+
+void updateSampleBank(char *fn, Sample *bank[16])
+{
+	FILE *fp = fopen(fn, "w");
+	for (int i = 0; i < 16; i++)
+	{
+		if (bank[i] != NULL)
+			fprintf(fp ,"%s;", bank[i]->fname);
+	}
+	fclose(fp);
 }
 
 /* create 16 step seq from .track file, refer to REAMME for track file syntax */
 void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 {
-	printw("Openeing: %s\n", fn);getch();
+	/* find size of the file */
+	//printw("Openeing: %s\n", fn);getch();
 	FILE *fp = fopen(fn, "rb");
+	if (fp == NULL)
+		return;
 	fseek(fp, 0, SEEK_END);
 	long fsize = ftell(fp);
 	fseek(fp, 0, SEEK_SET);
@@ -142,7 +170,7 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 	fread(str,fsize, 1, fp);
 	fclose(fp);
 	
-	printw("Alloced str mem, fsize = %d\n", fsize);getch();
+	//printw("Alloced str mem, fsize = %d\n", fsize);getch();
 
 	int i, 					//for indexing buffer
 		j, 					//for indexing file
@@ -150,13 +178,15 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 		bank_index, 		//which sample from the sound bank do we want
 		group_attrib = 0, 	//for detection which step attrib we're one
 		seq_step = 0;		//which step in the channel are we on
-	char buf_vol[16], buf_trim[16];
+	char buf_vol[16], buf_trim[16], buf_del[16], buf_prob[8]; //char buffer sfor step attributes
 	bool new_line = true,
 		 f_bank	  = false,
 		 f_group  = false;
 
 	memset(buf_vol, '\0', 16);
 	memset(buf_trim, '\0', 16);
+	memset(buf_del, '\0', 16);
+	memset(buf_prob, '\0', 8);
 	for (j = 0; j < fsize; j++)
 	{	
 		//printw("%c", str[j]);getch();
@@ -195,7 +225,7 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 			if (str[j + 1] == ')')
 			{
 				mix[chan]->pattern[seq_step++] = NULL;
-				printw("Found empty step\n");
+				//printw("Found empty step\n");
 				//j+=2;
 			}
 			else
@@ -212,11 +242,13 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 			{
 				f_group = false;
 				group_attrib = 0;
-				printw("Assigning volume value: %f\nSeq_step = %d", atof(buf_vol), seq_step);getch();
-				mix[chan]->pattern[seq_step++] = initStep(atoi(buf_vol), atoi(buf_trim));
+				//printw("Assigning volume value: %f\nSeq_step = %d\nOriginal buffer: %s", atof(buf_vol), seq_step, buf_vol);getch();
+				mix[chan]->pattern[seq_step++] = initStep(atoi(buf_vol), atoi(buf_trim), atoi(buf_del), buf_prob);
 				//printw("Done\n");
 				memset(buf_vol, '\0', 16);
 				memset(buf_trim, '\0', 16);
+				memset(buf_del, '\0', 16);
+				memset(buf_prob, '\0', 8);
 				i = 0;
 			}
 			else
@@ -228,6 +260,13 @@ void importSequence(char *fn, Channel *mix[16], Sample *bank[16])
 						break;
 					case 1:
 						buf_trim[i++] = str[j];
+						break;
+					case 2:
+						buf_del[i++] = str[j];
+						break;
+					case 3:
+						buf_prob[i++] = str[j];
+						break;
 				}
 			}
 		}
@@ -263,6 +302,7 @@ int validateSampleBank(Sample *bank[16])
 	return -1;
 }
 
+/* open audio device, allocate mixing channels */
 int initSDL()
 {
 	if (SDL_Init(SDL_INIT_AUDIO) < 0)
@@ -275,11 +315,13 @@ int initSDL()
 	return 0;
 }
 
+/* helper function for software metronome */
 static inline int64_t tv_to_u(struct timeval s)
 {
 	return s.tv_sec * 1000000 + s.tv_usec;
 }
- 
+
+/* helper function for software metronome */ 
 static inline struct timeval u_to_tv(int64_t x)
 {
 	struct timeval s;
@@ -300,9 +342,44 @@ void playSample(Sample *s)
 	}
 }
 
+static int checkRandom(char prob[4], int counter, int noise[16], int step)
+{
+	if (strcmp(prob, "%100") == 0)
+		return 0;
+	if (prob[0] == '%')
+	{
+		if (noise[step] <= (int)(prob[1] - 48))
+			return 0;
+		else
+			return 1;
+	}
+	else
+	{
+		int num = 0;
+		if (prob[2] == '1')
+		{
+			num = (int)(prob[3]) - 48 + 10;
+		}
+		else
+		{
+			num = (int)(prob[2]) - 48;
+		}
+		printw(" Counter: %d\nNum: %d \n", counter, num);
+		//if (counter == 16) exit(0);
+		if (counter % num == 0)
+			return 0;
+		else
+			return 1;
+	}
+}
+
 /* threaded function for playing a pattern */
 void *playSequence(void *args)
 {
+	int counter = 1,
+		noise[16];
+	for (int i = 0; i < 16; i++)
+		noise[i] = rand() % 10 + 1;
 	gettimeofday(&start, 0);
 	last = start;
 	struct p_args *pa = args;
@@ -327,15 +404,29 @@ void *playSequence(void *args)
 		
 		for (int i = 0; i < 16; i++)
 		{
-			if (pa->mix[i] != NULL && pa->mix[i]->pattern != NULL && pa->mix[i]->pattern[pa->i] != NULL)
+			if (pa->mix[i] != NULL && pa->mix[i]->pattern != NULL && pa->mix[i]->pattern[pa->i] != NULL &&
+				checkRandom(pa->mix[i]->pattern[pa->i]->prob, counter, noise, pa->i) == 0)
 			{
 				Mix_Volume(i, pa->mix[i]->pattern[pa->i]->vol);
-				if (Mix_PlayChannel(i, pa->mix[i]->sound->chunk, 0) == -1)
+				if (pa->mix[i]->pattern[pa->i]->delay > 0)
 				{
-					printw("SDL+ERROR: %s", Mix_GetError());
-					getch();
-					endwin();
-					exit(1);
+					if (Mix_FadeInChannel(i, pa->mix[i]->sound->chunk, 0, pa->mix[i]->pattern[pa->i]->delay) == -1)
+					{
+						printw("SDL+ERROR: %s", Mix_GetError());
+						getch();
+						endwin();
+						exit(1);
+					}
+				}
+				else
+				{
+					if (Mix_PlayChannel(i, pa->mix[i]->sound->chunk, 0) == -1)
+					{
+						printw("SDL+ERROR: %s", Mix_GetError());
+						getch();
+						endwin();
+						exit(1);
+					}
 				}
 				if (pa->mix[i]->pattern[pa->i]->trim < 500)
 					Mix_FadeOutChannel(i, pa->mix[i]->pattern[pa->i]->trim);
@@ -343,6 +434,8 @@ void *playSequence(void *args)
 		}
 
 		(pa->i) = ((pa->i) < 15) ? (pa->i)+1 : 0;
+		if (pa->i == 15)
+			counter = (counter <= 16) ? counter+1 : 1;
 		delay = 60 * 1000000 / pa->tempo;
 
 

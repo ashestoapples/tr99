@@ -14,7 +14,10 @@
 
 static bool debug = true;
 
-//prototype 
+//this whole thing is fucking spagetti
+
+char *pattern_bank_path = "patterns/1/";
+
 /* visual file browser fn */ 
 void fileBrowse(char buf[128])
 {
@@ -24,9 +27,9 @@ void fileBrowse(char buf[128])
 	int x, y, offset = 0;	//screen attribs
 	DIR *dir;
 	struct dirent *ent;
-	strcpy(buf, PATCH_ROOT);
+	strcpy(buf, PATCHES_SEARCH);
 	getmaxyx(stdscr, y, x);
-	strcpy(buf, PATCH_ROOT);
+	strcpy(buf, PATCHES_SEARCH);
 	file_iterate(buf, dir, ent, offset, y-2);
 }
 
@@ -108,13 +111,14 @@ static void file_iterate(char name[512], DIR *dir, struct dirent *ent, int offse
 			while (c != '\0')
 				c = name[i++];
 			name[i-2] = '\0';
-			printf("%s\n", name);
+			printf("Selected: %s\n", name);
 			//getch();
 			return;
 		}
 	}
 }
 
+/* create a timestamp for error log writting */
 char * timeStamp()
 {
 	time_t cur = time(NULL);
@@ -134,6 +138,7 @@ char * timeStamp()
 	return str_time;
 }
 
+/* initial menu, */
 void mainMenu(FILE *log)
 {
 	initscr();
@@ -175,10 +180,16 @@ void mainMenu(FILE *log)
 		printw("\tLoad Sound Bank\n");
 		attroff(A_STANDOUT);
 		if (d_iter == 2) attron(A_STANDOUT);
-		printw("\tLoad Pattern Bank\n");
+		printw("\tEdit Current Sound Bank\n");
 		attroff(A_STANDOUT);
 		if (d_iter == 3) attron(A_STANDOUT);
+		printw("\tLoad Pattern Bank\n");
+		attroff(A_STANDOUT);
+		if (d_iter == 4) attron(A_STANDOUT);
 		printw("\tGlobal Settings\n");
+		attroff(A_STANDOUT);
+		if (d_iter == 5) attron(A_STANDOUT);
+		printw("\tManage Saved Patterns\n");
 		attroff(A_STANDOUT);
 		ch = getch();
 		switch (ch)
@@ -187,7 +198,7 @@ void mainMenu(FILE *log)
 				d_iter = (d_iter > 0) ? d_iter-1 : d_iter;
 				break;
 			case KEY_DOWN:
-				d_iter = (d_iter < 3) ? d_iter+1 : d_iter;
+				d_iter = (d_iter < 4) ? d_iter+1 : d_iter;
 				break;
 			case YES:
 				switch (d_iter)
@@ -204,6 +215,15 @@ void mainMenu(FILE *log)
 						bank_name = bankSelection(log, bank, bank_name);
 						break;
 					case 2:
+						if (bank_name != -1)
+						{
+							bankEditor(log, bank, bank_name);
+						}
+						else 
+							bank_name = -1;
+						break;
+					case 3:
+						patternBankSelection(log);
 						break;
 
 				}
@@ -218,6 +238,7 @@ void mainMenu(FILE *log)
 
 }
 
+/* display for selecting a sample bank */
 int bankSelection(FILE *log, Sample *bank[16], int bankNumber)
 {
 	if (bankNumber != -1)
@@ -238,38 +259,110 @@ int bankSelection(FILE *log, Sample *bank[16], int bankNumber)
 	ch++;
 	bankNumber = ch;
 	char bank_path[32], full_path[512] ;
-	sprintf(bank_path, "banks/%d/", ch);
-	DIR *dir;
-	int i = 0;
-	struct dirent *ent;
-	if ((dir = opendir(bank_path)) != NULL)
+	sprintf(bank_path, "banks/%d.bank", ch);
+	if ( access( bank_path, F_OK ) == -1)
 	{
-		while ((ent = readdir(dir)) != NULL)
-		{
-			if (strcmp(ent->d_name, "..") != 0 && strcmp(ent->d_name, ".") != 0)
-			{
-				sprintf(full_path, "%s%s\0", bank_path, ent->d_name);
-				bank[i++] = initSample(full_path);
-				if (bank[i-1] == NULL)
-				{
-					fprintf(log, "%s\nFAILED to load smaple into memory: %s\nReason: %s", timeStamp(), full_path, Mix_GetError());
-				}
-				memset(full_path, '\0', 128);
-				if (i > 15)
-					break;
-			}
-		}
+		FILE *fp = fopen(bank_path, "w");
+		fclose(fp);
 	}
-	for (; i < 16; i++)
-		bank[i] = NULL;
+	loadSampleBank(bank_path, bank);
 	//getch();
 	return ch;
 }
 
-void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16], Sample *bank[16], int bank_name)
+void bankEditor(FILE *log, Sample *bank[16], int bankNumber)
 {
 	clear();
 	refresh();
+	int ch = 0;
+	while (ch != NO)
+	{
+		for (int i = 0; i < 16; i++)
+		{
+			if (bank[i] != NULL)
+				printw(" %d - [%s]\n", i, bank[i]->fname);
+				else
+				printw("%d - [ EMPTY ]\n", i);
+		}
+		ch = handleFuckingButtons();
+		if (ch < 16)
+		{
+			int snd = ch;
+			clear();
+			refresh();
+			printw("\t Delete or Replace ? (esc/enter)\nAnyother key to return\n");
+			ch = getch();
+			if (ch == DELETE)
+			{
+				destroySample(bank[snd]);
+				char *fn =  malloc(sizeof(char)*32);
+				sprintf(fn, "%s%d.bank", PATCH_ROOT, bankNumber);
+				updateSampleBank(fn, bank);
+				free(fn);
+			}
+			else if (ch == YES)
+			{
+				char p[128];
+				printw("Entering file browser\n");getch();
+				fileBrowse(p);
+				destroySample(bank[snd]);
+				bank[snd] = initSample(p);
+				clear(); refresh();
+				printw("Making some room\n");getch();
+				char *fn =  malloc(sizeof(char)*32);
+				printw(" Updating sample bank\n"); getch();
+				sprintf(fn, "%s%d.bank", PATCH_ROOT, bankNumber);
+				updateSampleBank(fn, bank);
+				free(fn);
+			}
+			ch = 0;
+		}	
+	}
+}
+
+void patternBankSelection(FILE *log)
+{
+	clear();
+	refresh();
+	int ch = 99;
+	DIR *dir;
+	struct dirent *ent;
+	if ((dir = opendir(pattern_bank_path)) != NULL)
+	{
+		;
+	}
+	else
+	{
+		fprintf(log, "[%s] UNABLE TO READ PATTERN DIRECTORY", timeStamp());
+		return;
+	}
+	while ((ch = handleFuckingButtons()+1) > 16 && ch > 0)
+	{
+		printw("Using pattern bank: %s", pattern_bank_path);
+		for (int i = 0 ; i < 16; i ++)
+		{
+			printw(" [%d] \n", i+1);
+		}
+	}
+	pattern_bank_path = malloc(sizeof(sizeof(char)*24));
+	fprintf(log, "[%s] patern dir is now: %s\n", timeStamp(), pattern_bank_path);
+	sprintf(pattern_bank_path, "patterns/%d/", ch);
+}
+
+/* menu for editing samples */
+void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16], Sample *bank[16], int bank_name)
+{
+	/* @param log - *FILE error log object
+		@param tempo - bpm tempo
+		@param ch - input character 
+		@param d_iter - itereate used to keep track of position in menu 
+		@param mix - pointer array to 16 mixing channels 
+		@param bank - pointer array to each sample in a bank
+		@param bank_name - int number of bank*/
+	clear();
+	refresh();
+
+	/* initialize mixer channels*/
 	for (int i = 0; i < 16; i++)
 	{
 		if (bank[i] != NULL)
@@ -277,29 +370,21 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 		else
 			mix[i] = NULL;
 	}
-	//Channel *mix[16];
-	//Sample *bank[16];
-	// for (int i = 0; i < 16; i++)
-	// 	mix[i] = NULL;
-	// loadSampleBank("1.bank", bank);
-	// for (int i = 0; i < 3; i++)
-	// 	printw("Bank sound %d: %s\n", i, bank[i]->fname);
-	// importSequence("2.track", mix, bank);
-	//char *bank_name = "1.bank";
-	
+
 	d_iter = 0, ch = 0;
 	int select = 0, chan = 0, bank_selected = 0, sound = 0;
 
 	enum modes {SELECT, COMPOSE, EDIT};
 	enum modes mode = SELECT;
 
-	Step *clipBoard = NULL;
+	Step *clipBoard = NULL; /* Step object acting as clipboard for pattern editing */
 
 	while (ch != 113)
 	{
 		bool empty = false;
 		clear();
 		refresh();
+		/* tempo/pattern output which is always printed */
 		attron(A_UNDERLINE);
 		printw("Tempo: %d bpm | 'p' - play/pause\n\n", (int)tempo);//getch();
 		attroff(A_UNDERLINE);
@@ -313,7 +398,10 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 				printw("[ ]");
 			attroff(A_STANDOUT);
 		}//getch();
+
 		printw("\n\nThe current Sample Bank is: %d\nMode: %d\n", bank_name, mode);
+
+		/* mode dependant display options */
 		if (mode == COMPOSE)
 		{
 			printw("The current selected sample is: %s", mix[chan]->sound->fname);
@@ -321,6 +409,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 		}
 		else if (mode == EDIT)
 		{
+			/* edit induvidual step attribs */
 			printw("Press step to edit..\n");
 			if (mix[chan]->pattern[select] == NULL)
 				printw("This is an empty step!\n");
@@ -332,7 +421,8 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 					printw("trim:\t\t%%100\n");
 				else
 					printw("trim:\t\t%d ms\n", mix[chan]->pattern[select]->trim);
-				printw("Delay:\t\t 0 ms\n");
+				printw("Delay:\t\t %d ms\n", mix[chan]->pattern[select]->delay);
+				printw("Probability\t %s\n", mix[chan]->pattern[select]->prob);
 				printw("Pitch:\t~0\n");
 				printw("Treble:\t1\t\n");
 				printw("Mid:\t1\n");
@@ -341,6 +431,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 		}
 		else if (mode == SELECT)
 		{
+			/* select mixing channel for editing */
 			printw("Select channel to edit\n");
 			for (int i = 0; i < 16; i++)
 			{
@@ -352,12 +443,14 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 			}			
 		}
 
+		/* get user input */
 		ch = handleFuckingButtons();
 		//printw("Handled buttons, ch = %d\n", ch);//getch();
 		bool skip = true;
+		/* switch the mode */
 		if (ch == CHANGEMODE)
 		{
-			destroyStep(clipBoard);
+			destroyStep(clipBoard); //the clipboard is erased when we change modes
 			clipBoard = NULL;
 			switch (mode)
 			{
@@ -380,12 +473,13 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 		}
 		else if (ch == PLAY)
 		{
-			tempo = playingDisplay(log, tempo, ch, mix);
+			tempo = playingDisplay(log, tempo, ch, mix, bank);
 		}
 		else if (ch == NO)
 			return;
 		if (!skip)
 		{
+			/* extra menu if we are switching into compose mode, ask the user which sample they would like to compose with */
 			clear();
 			refresh();
 			printw("Entering compose mode, select bank patch (1-16)\n");
@@ -420,18 +514,22 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 		}
 		else if (ch == IMPORT)
 		{
+			printw("Importing\n"); getch();
 			exportImportPattern(log, mix, bank, ch, 1);
 			ch = 0;
 		}
 		else
 		{
+			/* here is were we handle 16 button specific input for all cases */
+			//selecting channel
 			if (mode == SELECT && ch >= 0 && ch < 16)
 				chan = ch;
+			//adding/removing steps from the pattern
 			else if (mode == COMPOSE && ch >= 0 && ch < 16)
 			{
 				if (mix[chan]->pattern[ch] == NULL)
 				{
-					mix[chan]->pattern[ch] = initStep(64, 500);
+					mix[chan]->pattern[ch] = initStep(64, 500, 0, "%100");
 				}
 				else
 				{
@@ -439,6 +537,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 					mix[chan]->pattern[ch] = NULL;
 				}
 			}
+			//selecting/editing step attributes
 			else if (mode == EDIT)
 			{
 				if (ch >= 0 && ch < 16)
@@ -455,15 +554,81 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 							mix[chan]->pattern[select]->trim-=10;
 						else if (ch == KEY_RIGHT && mix[chan]->pattern[select]->trim < 500)
 							mix[chan]->pattern[select]->trim+=10;
+						else if (ch == DEL_UP && mix[chan]->pattern[select]->delay < 250)
+							mix[chan]->pattern[select]->delay+=10;
+						else if (ch == DEL_DN && mix[chan]->pattern[select]->delay > 0)
+							mix[chan]->pattern[select]->delay-=10;
+						else if (ch == PROB_U && strcmp(mix[chan]->pattern[select]->prob, "%100") != 0)
+						{
+							if (mix[chan]->pattern[select]->prob[0] == '%')
+							{
+								if (mix[chan]->pattern[select]->prob[1] == '9')
+									strcpy(mix[chan]->pattern[select]->prob, "1/16");
+								else
+								{
+									mix[chan]->pattern[select]->prob[1] += 1;
+								}
+							}
+							else
+							{
+								if (strcmp(mix[chan]->pattern[select]->prob, "1/2") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "%100");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/3") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/2");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/4") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/3");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/6") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/4");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/8") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/6");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/10") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/8");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/12") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/10");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/16") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/12");
+							}
+						}
+						else if (ch == PROB_D && strcmp(mix[chan]->pattern[select]->prob, "%10") != 0)
+						{
+							if (mix[chan]->pattern[select]->prob[0] == '%')
+							{
+								if (strcmp(mix[chan]->pattern[select]->prob, "%100") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/2");
+								else 
+									mix[chan]->pattern[select]->prob[1] -= 1;
+							}
+							else
+							{
+								if (strcmp(mix[chan]->pattern[select]->prob, "1/2") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/3");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/3") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/4");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/4") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/6");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/6") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/8");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/8") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/10");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/10") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/12");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/12") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "1/16");
+								else if (strcmp(mix[chan]->pattern[select]->prob, "1/16") == 0)
+									strcpy(mix[chan]->pattern[select]->prob, "%90");
+							}
+						}
 						else if (ch == 99)
 						{
 							clipBoard = initStep(mix[chan]->pattern[select]->vol,
-												 mix[chan]->pattern[select]->trim);
+												 mix[chan]->pattern[select]->trim,
+												 mix[chan]->pattern[select]->delay,
+												 mix[chan]->pattern[select]->prob);
 						}
 						else if (ch == 112 && clipBoard != NULL)
 						{
 							destroyStep(mix[chan]->pattern[select]);
-							mix[chan]->pattern[select] = initStep(clipBoard->vol, clipBoard->trim);
+							mix[chan]->pattern[select] = initStep(clipBoard->vol, clipBoard->trim, clipBoard->delay, clipBoard->prob);
 						}
 
 					}
@@ -471,7 +636,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 					{
 						if (ch == 112 && clipBoard != NULL)
 						{
-							mix[chan]->pattern[select] = initStep(clipBoard->vol, clipBoard->trim);
+							mix[chan]->pattern[select] = initStep(clipBoard->vol, clipBoard->trim, clipBoard->delay, clipBoard->prob);
 						}
 					}
 				}
@@ -480,7 +645,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 		//printw("Channel = %d\n", chan);getch();
 	}
 }
-
+/* handle top row input*/
 static int handleFuckingButtons()
 {
 	int select,
@@ -541,6 +706,7 @@ static int handleFuckingButtons()
 	return select;
 }
 
+/* used to save/load patterns */
 void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, int mode)
 {
 	char *mdisplay;
@@ -552,10 +718,11 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 	refresh();
 	DIR *dir;
 	struct dirent *ent;
+	/* find and display open/full save slots */
 	int blocks[16];
 	for (int i = 0; i < 16; i++)
 		blocks[i] = 0;
-	if ((dir = opendir(PATTERN_LOCATION)) != NULL)
+	if ((dir = opendir(pattern_bank_path)) != NULL)
 	{
 		while ((ent = readdir(dir)) != NULL)
 		{
@@ -601,10 +768,11 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 	}
 	
 	char fn[24];
-	sprintf(fn, "./patterns/%d.track\0", ch + 1);
+	sprintf(fn, "%s%d.track\0", pattern_bank_path, ch + 1);
 	fprintf(log, "[%s] opened %s for writing", timeStamp(), fn);
 
 	FILE *fp;
+	/* write if we're writing */
 	if (mode == 0)
 	{
 		fp = fopen(fn, "w");
@@ -630,7 +798,7 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 						strcat(line, "()");
 					else
 					{
-						sprintf(chunk, "(%d,%d)", (int)mix[i]->pattern[j]->vol, (int)mix[i]->pattern[j]->trim);
+						sprintf(chunk, "(%d,%d,%d,%s)", (int)mix[i]->pattern[j]->vol, (int)mix[i]->pattern[j]->trim, (int)mix[i]->pattern[j]->delay, mix[i]->pattern[j]->prob);
 						strcat(line, chunk);
 						memset(chunk, '\0', 16);
 					}
@@ -642,7 +810,7 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 		}
 		fclose(fp);
 	}
-	else
+	else /* read is we're reading */
 	{
 		if (blocks[ch] == 0)
 		{
@@ -652,6 +820,7 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 		}
 		//printw("Before Destruction\n");
 		//getch();
+		/* destroy all step objects before importing */
 		for (int i = 0; i < 16; i++)
 		{
 			if (mix[i] != NULL)
@@ -663,11 +832,13 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 		}
 		printw("Before import\n");
 		getch();
+		//the import function is in sound.c for some reason
 		importSequence(fn, mix, bank);
 	}
 }
 
-int playingDisplay(FILE *log,float tempo, int ch, Channel *mix[16])
+/* screen displaed while beat is playing */
+int playingDisplay(FILE *log,float tempo, int ch, Channel *mix[16], Sample *bank[16])
 {
 	//playSample(mix[0]->sound, 0);
 	nodelay(stdscr, TRUE);
@@ -680,6 +851,10 @@ int playingDisplay(FILE *log,float tempo, int ch, Channel *mix[16])
 	//printf("Before assigning args\n;");
 	struct p_args pa;
 	//pa.seq = seq;
+	/* we created a different thread to act as a metronome ,
+		the p_args object contains pointers which refer our mixer,
+		both threads read from the same struct in memory, however only the input_processing thread can write.
+		The metronome thread terminates when the input thread catches the correct key code */
 	for (int j = 0; j < 16; j++)
 	{
 		pa.mix[j] = mix[j];
@@ -717,7 +892,7 @@ int playingDisplay(FILE *log,float tempo, int ch, Channel *mix[16])
 		}
 
 		//printf("\n");
-		pa.ch = getch();
+		pa.ch = handleFuckingButtons();
 		//i = (i < 15) ? i+1 : 0;
 		//usleep((int)steps);
 		switch(pa.ch)
@@ -728,6 +903,14 @@ int playingDisplay(FILE *log,float tempo, int ch, Channel *mix[16])
 			case KEY_DOWN:
 				pa.tempo-=4;
 				break;
+		}
+		if (pa.ch >= 0 && pa.ch <= 15)
+		{
+			char fn[16];
+			sprintf(fn, "%s%d.track", pattern_bank_path, pa.ch + 1);
+			importSequence(fn, mix, bank);
+			for (int j = 0; j < 16; j++)
+				pa.mix[j] = mix[j];
 		}
 		tempo = (int)pa.tempo / 4;
 		//pa.steps = (60/(tempo) * 1000000) / 4;
