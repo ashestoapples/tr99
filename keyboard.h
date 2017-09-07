@@ -35,6 +35,8 @@
 #define IMPORT	73 //I
 #define DEL_UP	61 //=
 #define DEL_DN	45 //-
+#define PROB_U	93 //]
+#define PROB_D	91 //[
 #endif
 
 #endif
