@@ -31,7 +31,7 @@ void patternBankSelection(FILE *log);
 /* handle uper row input */
 static int handleFuckingButtons();
 /* menu for saveing/loading pattern */
-void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, int mode);
+void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, int mode, int slot);
 /* main menu */
 void mainMenu();
 /* menu for editing patterns*/

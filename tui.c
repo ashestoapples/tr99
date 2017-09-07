@@ -372,13 +372,13 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 	}
 
 	d_iter = 0, ch = 0;
-	int select = 0, chan = 0, bank_selected = 0, sound = 0;
+	int select = 0, chan = 0, bank_selected = 0, sound = 0, pattern_slot = 0;
 
-	enum modes {SELECT, COMPOSE, EDIT};
+	enum modes {SELECT, COMPOSE, EDIT, SWITCH_PATTERN};
 	enum modes mode = SELECT;
 
 	Step *clipBoard = NULL; /* Step object acting as clipboard for pattern editing */
-
+	exportImportPattern(log, mix, bank, ch, 1, select);
 	while (ch != 113)
 	{
 		bool empty = false;
@@ -442,6 +442,16 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 					printw("empty\n");
 			}			
 		}
+		else if (mode == SWITCH_PATTERN)
+		{
+			for (int i = 0; i < 16; i++)
+			{
+				if (pattern_slot == i)
+					attron(A_STANDOUT);
+				printw("Slot\t%d\n", i);
+				attroff(A_STANDOUT);
+			}
+		}
 
 		/* get user input */
 		ch = handleFuckingButtons();
@@ -456,18 +466,23 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 			{
 				case COMPOSE:
 					mode = SELECT;
-					select = 0;
+					//select = 0;
 					break;
 				case SELECT:
 					//printw("Here\n");getch();
-					mode = EDIT;
+					mode = SWITCH_PATTERN;
 					//printw("Mode: %d", mode);getch();
+					//skip = false;
+					break;
+				case SWITCH_PATTERN:
+					mode = EDIT;
 					//skip = false;
 					break;
 				case EDIT:
 					mode = COMPOSE;
 					skip = false;
 					break;
+				
 			}
 			//printw("Mode will be %d\n", mode); getch();
 		}
@@ -507,17 +522,17 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 				chan = ch;
 			}
 		}
-		else if (ch == EXPORT)
-		{
-			exportImportPattern(log, mix, bank, ch, 0);
-			ch = 0;
-		}
-		else if (ch == IMPORT)
-		{
-			printw("Importing\n"); getch();
-			exportImportPattern(log, mix, bank, ch, 1);
-			ch = 0;
-		}
+		// else if (ch == EXPORT)
+		// {
+		// 	exportImportPattern(log, mix, bank, ch, 0);
+		// 	ch = 0;
+		// }
+		// else if (ch == IMPORT)
+		// {
+		// 	printw("Importing\n"); getch();
+		// 	exportImportPattern(log, mix, bank, ch, 1);
+		// 	ch = 0;
+		// }
 		else
 		{
 			/* here is were we handle 16 button specific input for all cases */
@@ -641,6 +656,17 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 					}
 				}
 			}
+			else if (mode == SWITCH_PATTERN)
+			{
+				if (ch >= 0 && ch < 16)
+				{
+					exportImportPattern(log, mix, bank, ch, 0, pattern_slot);
+					char fn[16];
+					sprintf(fn, "%s%d.track", pattern_bank_path, ch + 1);
+					importSequence(fn, mix, bank);
+					pattern_slot = ch;
+				}
+			}
 		}
 		//printw("Channel = %d\n", chan);getch();
 	}
@@ -707,7 +733,7 @@ static int handleFuckingButtons()
 }
 
 /* used to save/load patterns */
-void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, int mode)
+void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, int mode, int slot)
 {
 	char *mdisplay;
 	if (mode == 0)
@@ -749,26 +775,26 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 		fprintf(log, "[%s] UNABLE TO READ PATTERN DIRECTORY", timeStamp());
 		return;
 	}
-	printw("Choose slot to %s patern (1 - 16), CHANGMODE to cancel\n", mdisplay);
-	for (int i = 0; i < 16; i++)
-	{
-		if (blocks[i] == 1)
-			printw("[%d] - OCCUPIED\n", i+1);
-		else
-			printw("[%d] - EMPTY\n", i+1);
-	}
-	ch = 99999;
-	while (ch > 15)
-	{
-		ch = handleFuckingButtons();
-		if (ch == CHANGEMODE)
-		{
-			return;
-		}
-	}
+	// printw("Choose slot to %s patern (1 - 16), CHANGMODE to cancel\n", mdisplay);
+	// for (int i = 0; i < 16; i++)
+	// {
+	// 	if (blocks[i] == 1)
+	// 		printw("[%d] - OCCUPIED\n", i+1);
+	// 	else
+	// 		printw("[%d] - EMPTY\n", i+1);
+	// }
+	// ch = 99999;
+	// while (ch > 15)
+	// {
+	// 	ch = handleFuckingButtons();
+	// 	if (ch == CHANGEMODE)
+	// 	{
+	// 		return;
+	// 	}
+	// }
 	
 	char fn[24];
-	sprintf(fn, "%s%d.track\0", pattern_bank_path, ch + 1);
+	sprintf(fn, "%s%d.track\0", pattern_bank_path, slot + 1);
 	fprintf(log, "[%s] opened %s for writing", timeStamp(), fn);
 
 	FILE *fp;
@@ -812,7 +838,7 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 	}
 	else /* read is we're reading */
 	{
-		if (blocks[ch] == 0)
+		if (blocks[slot] == 0)
 		{
 			printw("Cannot import empty pattern\n");
 			sleep(2);
@@ -830,8 +856,8 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 				mix[i] = NULL;
 			}
 		}
-		printw("Before import\n");
-		getch();
+		//printw("Before import\n");
+		//getch();
 		//the import function is in sound.c for some reason
 		importSequence(fn, mix, bank);
 	}
@@ -869,9 +895,6 @@ int playingDisplay(FILE *log,float tempo, int ch, Channel *mix[16], Sample *bank
 	printw("Thread created\n");//getch();
 	while (pa.ch != PAUSE)
 	{
-		//printw("LOOP\n");
-		//playStep(&(seq[i]));
-		//steps = ;
 		if (pa.i != prev)
 		{
 			clear();
