@@ -372,10 +372,14 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 	}
 
 	d_iter = 0, ch = 0;
+	bool playing = false;
 	int select = 0, chan = 0, bank_selected = 0, sound = 0, pattern_slot = 0;
 
 	enum modes {SELECT, COMPOSE, EDIT, SWITCH_PATTERN};
 	enum modes mode = SELECT;
+
+	struct p_args pa; //used for threading playing process
+	pthread_t player;
 
 	Step *clipBoard = NULL; /* Step object acting as clipboard for pattern editing */
 	exportImportPattern(log, mix, bank, ch, 1, select);
@@ -386,7 +390,11 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 		refresh();
 		/* tempo/pattern output which is always printed */
 		attron(A_UNDERLINE);
-		printw("Tempo: %d bpm | 'p' - play/pause\n\n", (int)tempo);//getch();
+		printw("Tempo: %d bpm | 'p' - play/pause", (int)tempo);//getch();
+		if (playing)
+			printw(" > \n\n");
+		else
+			printw(" || \n\n");
 		attroff(A_UNDERLINE);
 		for (int i = 0; i < 16; i++)
 		{
@@ -488,8 +496,34 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 		}
 		else if (ch == PLAY)
 		{
-			tempo = playingDisplay(log, tempo, ch, mix, bank);
+			if (playing)
+			{
+				pa.ch = PAUSE;
+				//pthread_cancel(player)
+				playing = false;
+			}
+			else
+			{			
+				float steps = (60/(tempo) * 1000000) / 4;
+				for (int j = 0; j < 16; j++)
+				{
+					pa.mix[j] = mix[j];
+				}
+				pa.ch = ch;
+				pa.i = 0;
+				pa.tempo = tempo;
+				//printf("Before pthread create\n;");
+				pthread_create(&player, NULL, &playSequence, (void *)&pa);
+				printw("Thread created\n");//getch();
+				playing = true;
+				//tempo = playingDisplay(log, tempo, ch, mix, bank);
+			}
+
 		}
+		else if (ch == BPM_UP)
+			tempo = (tempo < 200) ? tempo+1 : tempo;
+		else if (ch == BPM_DN)
+			tempo = (tempo > 20) ? tempo-1 : tempo;
 		else if (ch == NO)
 			return;
 		if (!skip)
