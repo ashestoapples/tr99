@@ -375,7 +375,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 	bool playing = false;
 	int select = 0, chan = 0, bank_selected = 0, sound = 0, pattern_slot = 0;
 
-	enum modes {SELECT, COMPOSE, EDIT, SWITCH_PATTERN};
+	enum modes {SELECT, COMPOSE, EDIT, SWITCH_PATTERN, FREE_PLAY};
 	enum modes mode = SELECT;
 
 	struct p_args pa; //used for threading playing process
@@ -460,6 +460,21 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 				attroff(A_STANDOUT);
 			}
 		}
+		else if (mode == FREE_PLAY)
+		{
+			if (ch >= 0 && ch <= 15)
+			{
+				if (bank[ch] != NULL)
+					playSample(bank[ch]);
+			}
+			for (int j = 0; j < 16; j++)
+			{
+				if (ch == j)
+					attron(A_STANDOUT);
+				printw("[%2d]", j);
+				attroff(A_STANDOUT);
+			}
+		}
 
 		/* get user input */
 		ch = handleFuckingButtons();
@@ -487,6 +502,9 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 					//skip = false;
 					break;
 				case EDIT:
+					mode = FREE_PLAY;
+					break;
+				case FREE_PLAY:
 					mode = COMPOSE;
 					skip = false;
 					break;
