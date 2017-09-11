@@ -303,14 +303,14 @@ void bankEditor(FILE *log, Sample *bank[16], int bankNumber)
 			else if (ch == YES)
 			{
 				char p[128];
-				printw("Entering file browser\n");getch();
+				//printw("Entering file browser\n");getch();
 				fileBrowse(p);
 				destroySample(bank[snd]);
 				bank[snd] = initSample(p);
 				clear(); refresh();
-				printw("Making some room\n");getch();
+				//printw("Making some room\n");getch();
 				char *fn =  malloc(sizeof(char)*32);
-				printw(" Updating sample bank\n"); getch();
+				//printw(" Updating sample bank\n"); getch();
 				sprintf(fn, "%s%d.bank", PATCH_ROOT, bankNumber);
 				updateSampleBank(fn, bank);
 				free(fn);
@@ -499,7 +499,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 			if (playing)
 			{
 				pa.ch = PAUSE;
-				//pthread_cancel(player)
+				pthread_cancel(player);
 				playing = false;
 			}
 			else
@@ -509,7 +509,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 				{
 					pa.mix[j] = mix[j];
 				}
-				pa.ch = ch;
+				pa.ch = 0;
 				pa.i = 0;
 				pa.tempo = tempo;
 				//printf("Before pthread create\n;");
@@ -699,6 +699,8 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 					sprintf(fn, "%s%d.track", pattern_bank_path, ch + 1);
 					importSequence(fn, mix, bank);
 					pattern_slot = ch;
+					for (int j = 0; j < 16; j++)
+						pa.mix[j] = mix[j];
 				}
 			}
 		}

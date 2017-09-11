@@ -390,11 +390,12 @@ void *playSequence(void *args)
 	int delay = 60 * 1000000 / pa->tempo;
 	int64_t d = 0, corr = 0, slp, cur, next = tv_to_u(start) + delay;
 	int64_t draw_interval = 20000;
-	//printf("\033[H\033[J");
+	//printw("In thread.\n");
 	
 	while (pa->ch != PAUSE) 
 	{
 		gettimeofday(&tv, 0);
+		//printw("LOOP\n");
 
 		slp = next - tv_to_u(tv) - corr;
 
