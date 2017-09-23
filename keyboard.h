@@ -37,6 +37,8 @@
 #define DEL_DN	45 //-
 #define PROB_U	93 //]
 #define PROB_D	91 //[
+#define BPM_UP	62 //>
+#define BPM_DN	60 //<
 #endif
 
 #endif
