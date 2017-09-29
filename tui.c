@@ -145,7 +145,7 @@ void mainMenu(FILE *log)
 	raw();
 	if (initSDL() == -1)
 	{
-		fprintf(log, "%s\nUnable to init SDL\n", timeStamp());
+		fprintf(log, "%s\nUnable to init SDL\nReason: %s\n", timeStamp(), Mix_GetError());
 		endwin();
 	}
 	int ch = 0;
@@ -156,9 +156,7 @@ void mainMenu(FILE *log)
 
 	keypad(stdscr, TRUE);
 	//menu relative vars
-	int select = 0, //current selected item
-		chan = 0, 	//current selected channel
-		d_iter = 0;
+	int d_iter = 0;
 	int bank_name = -1;
 	Sample *bank[16]; 
 	Channel *mix[16];
@@ -241,6 +239,9 @@ void mainMenu(FILE *log)
 /* display for selecting a sample bank */
 int bankSelection(FILE *log, Sample *bank[16], int bankNumber)
 {
+	char bank_path[32];
+	int ch = -1;
+
 	if (bankNumber != -1)
 	{
 		for (int i = 0; i < 16; i++)
@@ -253,12 +254,10 @@ int bankSelection(FILE *log, Sample *bank[16], int bankNumber)
 	clear();
 	refresh();
 	printw("Select bank: (1-16): ");
-	int ch = -1;
 	while (ch < 0 || ch > 15)
 		ch = handleFuckingButtons();
 	ch++;
 	bankNumber = ch;
-	char bank_path[32], full_path[512] ;
 	sprintf(bank_path, "banks/%d.bank", ch);
 	if ( access( bank_path, F_OK ) == -1)
 	{
@@ -326,7 +325,6 @@ void patternBankSelection(FILE *log)
 	refresh();
 	int ch = 99;
 	DIR *dir;
-	struct dirent *ent;
 	if ((dir = opendir(pattern_bank_path)) != NULL)
 	{
 		;
@@ -373,7 +371,7 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 
 	d_iter = 0, ch = 0;
 	bool playing = false;
-	int select = 0, chan = 0, bank_selected = 0, sound = 0, pattern_slot = 0;
+	int select = 0, chan = 0, pattern_slot = 0;
 
 	enum modes {SELECT, COMPOSE, EDIT, SWITCH_PATTERN, FREE_PLAY};
 	enum modes mode = SELECT;
@@ -385,7 +383,6 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 	exportImportPattern(log, mix, bank, ch, 1, select);
 	while (ch != 113)
 	{
-		bool empty = false;
 		clear();
 		refresh();
 		/* tempo/pattern output which is always printed */
@@ -522,7 +519,6 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 			}
 			else
 			{			
-				float steps = (60/(tempo) * 1000000) / 4;
 				for (int j = 0; j < 16; j++)
 				{
 					pa.mix[j] = mix[j];
@@ -539,9 +535,17 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 
 		}
 		else if (ch == BPM_UP)
+		{	
 			tempo = (tempo < 200) ? tempo+1 : tempo;
+			if (playing)
+				pa.tempo = (pa.tempo < 200 ) ? pa.tempo+1 : pa.tempo;
+		}
 		else if (ch == BPM_DN)
-			tempo = (tempo > 20) ? tempo-1 : tempo;
+		{
+			tempo = (tempo > 20) ? tempo-1 : tempo;	
+			if (playing)
+				pa.tempo = (pa.tempo > 20 ) ? pa.tempo-1 : pa.tempo;
+		}
 		else if (ch == NO)
 			return;
 		if (!skip)
@@ -724,6 +728,11 @@ void patternEditor(FILE *log, float tempo, int ch, int d_iter, Channel *mix[16],
 		}
 		//printw("Channel = %d\n", chan);getch();
 	}
+	if (playing)
+	{
+		pthread_cancel(player);
+		pa.ch = PAUSE;
+	}
 }
 /* handle top row input*/
 static int handleFuckingButtons()
@@ -790,16 +799,19 @@ static int handleFuckingButtons()
 void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, int mode, int slot)
 {
 	char *mdisplay;
+	DIR *dir;
+	int blocks[16];
+	char fn[24];
+	FILE *fp;
+
 	if (mode == 0)
 		mdisplay = "export";
 	else
 		mdisplay = "import";
 	clear();
 	refresh();
-	DIR *dir;
 	struct dirent *ent;
 	/* find and display open/full save slots */
-	int blocks[16];
 	for (int i = 0; i < 16; i++)
 		blocks[i] = 0;
 	if ((dir = opendir(pattern_bank_path)) != NULL)
@@ -829,29 +841,10 @@ void exportImportPattern(FILE *log, Channel *mix[16], Sample *bank[16], int ch, 
 		fprintf(log, "[%s] UNABLE TO READ PATTERN DIRECTORY", timeStamp());
 		return;
 	}
-	// printw("Choose slot to %s patern (1 - 16), CHANGMODE to cancel\n", mdisplay);
-	// for (int i = 0; i < 16; i++)
-	// {
-	// 	if (blocks[i] == 1)
-	// 		printw("[%d] - OCCUPIED\n", i+1);
-	// 	else
-	// 		printw("[%d] - EMPTY\n", i+1);
-	// }
-	// ch = 99999;
-	// while (ch > 15)
-	// {
-	// 	ch = handleFuckingButtons();
-	// 	if (ch == CHANGEMODE)
-	// 	{
-	// 		return;
-	// 	}
-	// }
 	
-	char fn[24];
-	sprintf(fn, "%s%d.track\0", pattern_bank_path, slot + 1);
+	sprintf(fn, "%s%d.track\n", pattern_bank_path, slot + 1);
 	fprintf(log, "[%s] opened %s for writing", timeStamp(), fn);
 
-	FILE *fp;
 	/* write if we're writing */
 	if (mode == 0)
 	{
@@ -957,13 +950,13 @@ int playingDisplay(FILE *log,float tempo, int ch, Channel *mix[16], Sample *bank
 			printw("Tempo: %d\n", (int)(tempo));
 			for (int j = 0; j < 16; j++)
 			{
-				if ((j) % 4 == 0 && j != 15 || j == 0)
+				if (((j) % 4 == 0 && j != 15) || j == 0)
 					attron(A_STANDOUT);
 				if (pa.i == j)
 					printw("[*]");
 				else
 					printw("[ ]");
-				if ((j) % 4 == 0 && j != 15 || j == 0)
+				if (((j) % 4 == 0 && j != 15) || j == 0)
 					attroff(A_STANDOUT);
 			}
 		}

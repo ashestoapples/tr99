@@ -389,7 +389,6 @@ void *playSequence(void *args)
 	pa->tempo = (pa->tempo)*4;
 	int delay = 60 * 1000000 / pa->tempo;
 	int64_t d = 0, corr = 0, slp, cur, next = tv_to_u(start) + delay;
-	int64_t draw_interval = 20000;
 	//printw("In thread.\n");
 	
 	while (pa->ch != PAUSE) 
@@ -449,4 +448,6 @@ void *playSequence(void *args)
 
 	}
 	Mix_HaltChannel(-1);
+
+	return NULL;
 }
