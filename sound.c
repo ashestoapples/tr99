@@ -33,7 +33,7 @@ Sample * initSample(char *fn)
 	Sample *ptr = (Sample*)malloc(sizeof(Sample));
 	ptr->fname = (char*)malloc(sizeof(char)*512);
 	strcpy(ptr->fname, fn);
-	printf("%s\n", ptr->fname); getch();
+	//printf("%s\n", ptr->fname); getch();
 	ptr->chunk = Mix_LoadWAV(fn);
 	if (ptr->chunk == NULL)
 	{
@@ -97,18 +97,6 @@ void DestroyChannel(Channel *ptr)
 	free(ptr);
 	ptr = NULL;
 }
-
-// void destroy_p_args(struct p_args pa)
-// {
-// 	for (int i = 0; i < 16; i++)
-// 	{
-// 		if (pa.com[i] != NULL)
-// 		{
-// 			free(pa.com[i]);
-// 			pa.com[i] = NULL;
-// 		}
-// 	}
-// }
 
 /* read a sample .bank file and load wavs into memory*/
 void loadSampleBank(char *fn, Sample *bank[16])
